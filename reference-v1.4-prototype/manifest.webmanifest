@@ -1,0 +1,11 @@
+{
+  "name": "个人状态观察器",
+  "short_name": "状态观察器",
+  "description": "一个安静的私人状态记录工具。",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F5F2EA",
+  "theme_color": "#F5F2EA",
+  "lang": "zh-CN",
+  "icons": []
+}
