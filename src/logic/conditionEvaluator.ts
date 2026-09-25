@@ -1,5 +1,5 @@
-export type Condition = { field: string; op: string; value?: unknown }
-export type ConditionGroup = { all?: Condition[]; any?: Condition[] }
+import { FIELD_MAP } from '../data/questions'
+import type { Condition, ShowWhen } from '../types'
 
 export function compare(actual: unknown, op: string, expected?: unknown): boolean {
   if (op === 'exists') return actual !== null && actual !== undefined
@@ -8,9 +8,11 @@ export function compare(actual: unknown, op: string, expected?: unknown): boolea
   if (op === 'includes') return Array.isArray(actual) && actual.includes(expected)
   if (op === 'notIncludes') return Array.isArray(actual) && !actual.includes(expected)
   if (actual === null || actual === undefined) return false
+
   const a = Number(actual)
   const b = Number(expected)
   if (Number.isNaN(a) || Number.isNaN(b)) return false
+
   if (op === 'gt') return a > b
   if (op === 'gte') return a >= b
   if (op === 'lt') return a < b
@@ -18,11 +20,31 @@ export function compare(actual: unknown, op: string, expected?: unknown): boolea
   return false
 }
 
-export function matchesGroup(record: Record<string, unknown>, group?: ConditionGroup | null): boolean {
+export function evaluateCondition(
+  condition: Condition,
+  answers: Record<string, unknown>
+): boolean {
+  const mappedField = FIELD_MAP[condition.field] ?? condition.field
+  return compare(answers[mappedField], condition.op, condition.value)
+}
+
+export function matchesGroup(
+  answers: Record<string, unknown>,
+  group?: ShowWhen | null
+): boolean {
   if (!group) return true
+
   const all = group.all ?? []
   const any = group.any ?? []
-  const allPass = all.every(c => compare(record[c.field], c.op, c.value))
-  const anyPass = any.length === 0 || any.some(c => compare(record[c.field], c.op, c.value))
+  const allPass = all.every(condition => evaluateCondition(condition, answers))
+  const anyPass = any.length === 0 || any.some(condition => evaluateCondition(condition, answers))
+
   return allPass && anyPass
+}
+
+export function evaluateShowWhen(
+  showWhen: ShowWhen | undefined,
+  answers: Record<string, unknown>
+): boolean {
+  return matchesGroup(answers, showWhen)
 }

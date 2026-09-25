@@ -1,6 +1,7 @@
 // Migrated from the validated V1.4 prototype.
-// @ts-nocheck
-export const OPTIONS = {
+import type { CoreQuestion, OptionalQuestion, Option } from '../types'
+
+export const OPTIONS: Record<string, Option[]> = {
   mood: [
     { value: 1, label: '很差', icon: '😞' },
     { value: 2, label: '不太好', icon: '🙁' },
@@ -180,7 +181,7 @@ export const OPTIONS = {
     { value: 'none', label: '没有' },
     { value: 'bleeding', label: '有出血' },
     { value: 'discharge', label: '有分泌物变化' },
-        { value: 'unsure', label: '不确定' }
+    { value: 'unsure', label: '不确定' }
   ],
   bleedingLevel: [
     { value: 'spotting', label: '点滴' },
@@ -201,9 +202,9 @@ export const OPTIONS = {
     { value: 'bloody', label: '带血' },
     { value: 'other', label: '其他' }
   ]
-};
+}
 
-export const QUESTIONS = [
+export const QUESTIONS: CoreQuestion[] = [
   { id: 'mood', parentId: null, phase: '今天', text: '今天心情怎么样？', helper: '只选最接近今天的感觉。', type: 'choice', options: OPTIONS.mood },
   { id: 'energy', parentId: null, phase: '今天', text: '今天有精神吗？', helper: '想的是今天整体的精神与身体活力。', type: 'choice', options: OPTIONS.energy },
   { id: 'drive', parentId: null, phase: '今天', text: '今天做事情容易开始吗？', helper: '不管最后做没做完，只看“开始行动”有多容易。', type: 'choice', options: OPTIONS.drive },
@@ -271,9 +272,9 @@ export const QUESTIONS = [
   {
     id: 'bedtime_temperature_feeling', parentId: null, phase: '昨夜', text: '昨晚睡前，身体感觉怎么样？', type: 'choice', options: OPTIONS.bedtimeTemperature
   }
-];
+]
 
-export const OPTIONAL_QUESTIONS = [
+export const OPTIONAL_QUESTIONS: OptionalQuestion[] = [
   { id: 'today_flag', label: '今天有没有什么特别明显的状态？', type: 'multiChoice', options: OPTIONS.recordingFlag },
   { id: 'basal_temperature_c', label: '晨起体温', type: 'number', unit: '°C' },
   { id: 'weight_kg', label: '体重', type: 'number', unit: 'kg' },
@@ -309,9 +310,9 @@ export const OPTIONAL_QUESTIONS = [
       { value: 'other', label: '其他' }
     ] },
   { id: 'note', label: '今天还有什么想留下的吗？', type: 'text', maxLength: 500 }
-];
+]
 
-export const FIELD_MAP = {
+export const FIELD_MAP: Record<string, string> = {
   sleep_duration_min: 'sleepDurationMin',
   sleep_quality: 'sleepQuality',
   sleep_problem: 'sleepProblem',
@@ -341,6 +342,6 @@ export const FIELD_MAP = {
   discomfort_area: 'discomfortArea',
   context_events: 'contextEvents',
   note: 'note'
-};
+}
 
-export const SCHEMA_VERSION = '0.6';
+export const SCHEMA_VERSION = '0.6'
