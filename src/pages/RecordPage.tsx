@@ -2,32 +2,42 @@ import { useEffect, useMemo, useState } from 'react'
 import { QuestionCard } from '../components/QuestionCard'
 import { createDailyRecord } from '../app/createDailyRecord'
 import { getDay, saveDay } from '../db/records'
-import { getField, getNextQuestion, getPreviousQuestion, isVisible } from '../logic/questionEngine'
+import { getField, getNextQuestion, getPreviousQuestion } from '../logic/questionEngine'
 import type { DailyRecord } from '../types'
 
 function today() { return new Date().toISOString().slice(0, 10) }
 
 export function RecordPage() {
   const [record, setRecord] = useState<DailyRecord>(() => createDailyRecord(today()))
+  const [loading, setLoading] = useState<boolean>(true) // 引入加载状态锁，防止异步闪烁
   const [questionId, setQuestionId] = useState<string | null>(null)
 
   useEffect(() => { 
+    let isMounted = true;
     void getDay(today()).then(existing => { 
+      if (!isMounted) return;
       if (existing) {
         setRecord(existing)
-        // 从数据库读取时，如果已有进度，自动恢复到上次答题位置
         if (existing.lastQuestionId) {
           setQuestionId(existing.lastQuestionId)
         }
-      } 
-    }) 
+      }
+      setLoading(false) // 读取完毕，释放加载锁
+    }).catch(() => {
+      if (isMounted) setLoading(false)
+    })
+    return () => { isMounted = false; }
   }, [])
 
-  const question = useMemo(() => getNextQuestion(record.answers, questionId), [record.answers, questionId])
+  const question = useMemo(() => {
+    if (loading) return null; // 加载未完成时不计算题目
+    return getNextQuestion(record.answers, questionId);
+  }, [loading, record.answers, questionId])
 
-  // 【修复核心】：彻底删除了导致无限闪烁死循环的 rogue useEffect
-
-  async function persist(next: DailyRecord) { setRecord(next); await saveDay(next) }
+  async function persist(next: DailyRecord) { 
+    setRecord(next); 
+    await saveDay(next); 
+  }
 
   async function answer(value: unknown) {
     if (!question) return
@@ -35,6 +45,17 @@ export function RecordPage() {
     const next = { ...record, answers, lastQuestionId: question.id, updatedAt: new Date().toISOString() }
     await persist(next)
     setQuestionId(question.id)
+  }
+
+  // 加载中显示平稳的占位，避免画面突变
+  if (loading) {
+    return (
+      <div className="page shell">
+        <section className="empty-state">
+          <p>加载中...</p>
+        </section>
+      </div>
+    )
   }
 
   if (!question) return (
