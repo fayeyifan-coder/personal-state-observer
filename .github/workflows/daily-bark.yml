@@ -22,7 +22,7 @@ jobs:
 
           # 请将下方引号内的链接，替换为你实际部署上线的网页地址 (例如 GitHub Pages 地址)
           # 这样你点击手机通知时，就能直接跳到日记页面
-          APP_URL="https://你的实际网址.com"
+          APP_URL="https://fayeyifan-coder.github.io/personal-state-observer/"
 
           # 使用 POST 方式调用 Bark，直接发送 JSON，完美解决中文编码问题
           curl -X POST "https://api.day.app/push" \
