@@ -1,0 +1,35 @@
+name: Daily Bark Reminder
+
+on:
+  schedule:
+    # 定时任务：cron 表达式使用的是 UTC 时间。
+    # UTC 12:00 = 北京时间 20:00 (晚上8点)。如果你想改时间，只需修改前面的 12。
+    - cron: '0 12 * * *'
+  workflow_dispatch: # 加上这个，允许你在 GitHub 网页上手动点击运行，方便随时测试
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Bark Notification
+        env:
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+        run: |
+          if [ -z "$BARK_KEY" ]; then
+            echo "错误：未找到 BARK_KEY，请去仓库 Settings 配置"
+            exit 1
+          fi
+
+          # 请将下方引号内的链接，替换为你实际部署上线的网页地址 (例如 GitHub Pages 地址)
+          # 这样你点击手机通知时，就能直接跳到日记页面
+          APP_URL="https://你的实际网址.com"
+
+          # 使用 POST 方式调用 Bark，直接发送 JSON，完美解决中文编码问题
+          curl -X POST "https://api.day.app/push" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "{
+              \"device_key\": \"$BARK_KEY\",
+              \"title\": \"私人观察台\",
+              \"body\": \"今天的你是什么样子？花一分钟留下记录吧。\",
+              \"url\": \"$APP_URL\"
+            }"
