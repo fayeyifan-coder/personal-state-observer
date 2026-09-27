@@ -2,9 +2,10 @@ import type { ReactNode } from 'react'
 
 type Item = { href: string; label: string; icon: ReactNode }
 const items: Item[] = [
-  { href: '/', label: '今天', icon: '○' },
-  { href: '/timeline', label: '时间轴', icon: '／' },
-  { href: '/data', label: '数据', icon: '□' }
+  { href: '/', label: '今日', icon: '📅' },
+  { href: '/timeline', label: '时间线', icon: '⏳' },
+  { href: '/data', label: '数据', icon: '📊' },
+  { href: '/settings', label: '设置', icon: '⚙' }
 ]
 
 export function BottomNav({ current }: { current: string }) {
