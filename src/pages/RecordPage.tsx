@@ -56,11 +56,16 @@ export function RecordPage() {
       [getField(question.id)]: value
     }
 
+    const isLastQuestion = getNextQuestion(answers, question.id) === null
+    const now = new Date().toISOString()
+
     const next = {
       ...record,
       answers,
       lastQuestionId: question.id,
-      updatedAt: new Date().toISOString()
+      recordingStatus: isLastQuestion ? 'recorded' as const : record.recordingStatus,
+      completedAt: isLastQuestion ? now : record.completedAt,
+      updatedAt: now
     }
 
     await persist(next)
