@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { BottomNav } from '../components/BottomNav'
 import { listDays } from '../db/records'
 import type { DailyRecord } from '../types'
@@ -299,7 +299,7 @@ export function TimelinePage() {
                     <span className="calendar-date">{Number(day.slice(-2))}</span>
                     <span className={record ? `calendar-mark status-${record.recordingStatus}` : 'calendar-mark'}>{record ? statusSymbol(record.recordingStatus) : '·'}</span>
                     <span className="calendar-mood">{mood == null ? ' ' : mood}</span>
-                    {sleep != null && <span className="calendar-sleep-mini" style={{ '--sleep': `${Math.min(100, (sleep / 600) * 100)}%` } as React.CSSProperties} />}
+                    {sleep != null && <span className="calendar-sleep-mini" style={{ '--sleep': `${Math.min(100, (sleep / 600) * 100)}%` } as CSSProperties} />}
                   </div>
                 )
               })}
