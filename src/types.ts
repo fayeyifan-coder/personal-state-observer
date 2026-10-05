@@ -1,8 +1,17 @@
+// src/types.ts
+
 export type QuestionType =
   | 'choice'
   | 'multiChoice'
   | 'text'
   | 'number'
+
+export type AnswerValue =
+  | string
+  | number
+  | boolean
+  | Array<string | number>
+  | null
 
 export type Operator =
   | 'exists'
@@ -29,6 +38,8 @@ export interface ShowWhen {
 export interface Option {
   label: string
   value: string | number
+  icon?: string
+  description?: string
   [key: string]: unknown
 }
 
@@ -58,7 +69,10 @@ export interface OptionalQuestion {
 
 export type Question = CoreQuestion | OptionalQuestion
 
-export type RecordingStatus = 'draft' | 'recorded' | 'opted_out'
+export type RecordingStatus =
+  | 'draft'
+  | 'recorded'
+  | 'opted_out'
 
 export type DailyRecord = {
   id: string
