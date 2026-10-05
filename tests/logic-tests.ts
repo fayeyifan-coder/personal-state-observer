@@ -1,5 +1,5 @@
 import { evaluateCondition, evaluateShowWhen } from '../src/logic/conditionEvaluator'
-import { getNextQuestion, sanitizeAnswers } from '../src/logic/questionEngine'
+import { getNextQuestion, getVisibleQuestions, sanitizeAnswers, QUESTIONS } from '../src/logic/questionEngine'
 import { FIELD_MAP } from '../src/data/questions'
 import { getLocalDateKey, formatDateKey, parseDateKey } from '../src/utils/dateUtils'
 
@@ -110,5 +110,75 @@ assert(
 const parsed = parseDateKey('2026-09-25')
 assert(getLocalDateKey(parsed) === '2026-09-25', 'parseDateKey round-trips a date key locally')
 assert(formatDateKey('2026-09-25') === '2026年09月25日', 'formatDateKey formats the date key')
+assert(
+  QUESTIONS.length === 32,
+  'unified question flow contains 32 questions'
+)
 
+assert(
+  QUESTIONS[0]?.id === 'mood',
+  'unified question flow starts with mood'
+)
+
+const optionalStart = getNextQuestion({}, 'bedtime_temperature_feeling')
+assert(
+  optionalStart?.id === 'today_flag',
+  'optional questions follow the core question flow'
+)
+
+const visibleWithLowAppetite = getVisibleQuestions({
+  morningAppetite: 1
+})
+
+assert(
+  visibleWithLowAppetite.some(q => q.id === 'previous_evening_fullness'),
+  'previous_evening_fullness is visible when morning appetite is low'
+)
+
+const visibleWithGoodAppetite = getVisibleQuestions({
+  morningAppetite: 3
+})
+
+assert(
+  !visibleWithGoodAppetite.some(q => q.id === 'previous_evening_fullness'),
+  'previous_evening_fullness is hidden when morning appetite is not low'
+)
+
+const visibleCycle = getVisibleQuestions({
+  cycleGateway: 'bleeding'
+})
+
+assert(
+  visibleCycle.some(q => q.id === 'bleeding_level'),
+  'bleeding_level is visible for bleeding gateway'
+)
+
+assert(
+  !visibleCycle.some(q => q.id === 'discharge_amount'),
+  'discharge_amount is hidden for bleeding gateway'
+)
+
+const visibleDiscomfort = getVisibleQuestions({
+  physicalDiscomfort: 3
+})
+
+assert(
+  visibleDiscomfort.some(q => q.id === 'discomfort_area'),
+  'discomfort_area is visible when physical discomfort is high'
+)
+
+const numberAnswers = sanitizeAnswers({
+  basalTemperatureC: 36.5,
+  weightKg: 57.2
+})
+
+assert(
+  numberAnswers.basalTemperatureC === 36.5,
+  'basal temperature number answer is preserved'
+)
+
+assert(
+  numberAnswers.weightKg === 57.2,
+  'weight number answer is preserved'
+)
 console.log('\nTests Completed.')
