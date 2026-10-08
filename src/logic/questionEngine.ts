@@ -1,12 +1,13 @@
+// src/logic/questionEngine.ts
 import { FIELD_MAP, OPTIONAL_QUESTIONS, QUESTIONS } from '../data/questions'
 import { matchesGroup } from './conditionEvaluator'
-import type { CoreQuestion, OptionalQuestion, Question } from '../types'
+import type { CoreQuestion, ObservationPhase, OptionalQuestion, Question } from '../types'
 
 function normalizeOptionalQuestion(question: OptionalQuestion): CoreQuestion {
   return {
     id: question.id,
     parentId: null,
-    phase: 'optional',
+    phase: question.phase ?? 'morning',
     text: question.label,
     type: question.type,
     options: question.options,
@@ -16,19 +17,14 @@ function normalizeOptionalQuestion(question: OptionalQuestion): CoreQuestion {
   }
 }
 
-/**
- * 统一的问题流：
- * 17 个核心问题 + 15 个可选问题 = 32 个问题
- *
- * OptionalQuestion 会先转换成 CoreQuestion，
- * 这样现有 RecordPage 可以继续消费同一种结构。
- */
 const questionList: CoreQuestion[] = [
   ...QUESTIONS,
   ...OPTIONAL_QUESTIONS.map(normalizeOptionalQuestion)
 ]
 
 const allQuestions: Question[] = questionList
+
+type PhaseFilter = ObservationPhase | 'all'
 
 export function getField(questionId: string): string {
   return FIELD_MAP[questionId] ?? questionId
@@ -42,36 +38,64 @@ export function isVisible(
 }
 
 export function visibleQuestions(
-  answers: Record<string, unknown>
+  answers: Record<string, unknown>,
+  phase: PhaseFilter = 'all'
 ): CoreQuestion[] {
-  return questionList.filter(q => q.phaseBreak || isVisible(answers, q))
+  return questionList.filter(q =>
+    !q.phaseBreak &&
+    (phase === 'all' || q.phase === phase) &&
+    isVisible(answers, q)
+  )
 }
 
 export function getVisibleQuestions(
   answers: Record<string, unknown>,
-  questionsBase: CoreQuestion[] = questionList
+  questionsBase: CoreQuestion[] = questionList,
+  phase: PhaseFilter = 'all'
 ): CoreQuestion[] {
-  return questionsBase.filter(q => isVisible(answers, q))
+  return questionsBase.filter(q =>
+    !q.phaseBreak &&
+    (phase === 'all' || q.phase === phase) &&
+    isVisible(answers, q)
+  )
 }
 
 export function getNextQuestion(
   answers: Record<string, unknown>,
-  currentId: string | null
+  currentId: string | null,
+  phase: PhaseFilter = 'all'
 ): CoreQuestion | null {
-  const visible = visibleQuestions(answers).filter(q => !q.phaseBreak)
+  const visible = visibleQuestions(answers, phase)
   const index = currentId ? visible.findIndex(q => q.id === currentId) : -1
 
   return visible[index + 1] ?? null
 }
 
+export function getFirstQuestion(
+  answers: Record<string, unknown>,
+  phase: PhaseFilter = 'all'
+): CoreQuestion | null {
+  return visibleQuestions(answers, phase).find(question => {
+    const value = answers[getField(question.id)]
+    return value === undefined || value === null
+  }) ?? null
+}
+
 export function getPreviousQuestion(
   answers: Record<string, unknown>,
-  currentId: string | null
+  currentId: string | null,
+  phase: PhaseFilter = 'all'
 ): CoreQuestion | null {
-  const visible = visibleQuestions(answers).filter(q => !q.phaseBreak)
+  const visible = visibleQuestions(answers, phase)
   const index = visible.findIndex(q => q.id === currentId)
 
   return index > 0 ? visible[index - 1] : null
+}
+
+export function phaseQuestions(
+  phase: ObservationPhase
+): CoreQuestion[] {
+  return questionList.filter(q => q.phase === phase)
 }
 
 export function sanitizeAnswers(

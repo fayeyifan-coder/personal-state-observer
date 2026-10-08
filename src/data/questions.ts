@@ -1,4 +1,4 @@
-// Migrated from the validated V1.4 prototype.
+// src/data/questions.ts
 import type { CoreQuestion, OptionalQuestion, Option } from '../types'
 
 export const OPTIONS: Record<string, Option[]> = {
@@ -201,25 +201,71 @@ export const OPTIONS: Record<string, Option[]> = {
     { value: 'brown', label: '褐色' },
     { value: 'bloody', label: '带血' },
     { value: 'other', label: '其他' }
+  ],
+  periodStart: [
+    { value: 'yes', label: '是，今天是这次月经第 1 天' },
+    { value: 'no', label: '不是' },
+    { value: 'unsure', label: '不确定' }
+  ],
+  acnePresence: [
+    { value: 'none', label: '没有明显痤疮' },
+    { value: 'present', label: '有' }
+  ],
+  acneSeverity: [
+    { value: 'mild', label: '轻度' },
+    { value: 'moderate', label: '中度' },
+    { value: 'severe', label: '重度' }
+  ],
+  acneCyst: [
+    { value: 'none', label: '没有囊肿' },
+    { value: 'present', label: '有囊肿型痘痘' }
+  ],
+  acneLocations: [
+    { value: 'forehead', label: '额头' },
+    { value: 'nose', label: '鼻部' },
+    { value: 'cheeks', label: '脸颊' },
+    { value: 'chin', label: '下巴' },
+    { value: 'jawline', label: '下颌线' },
+    { value: 'chest', label: '胸口' },
+    { value: 'back', label: '背部' },
+    { value: 'other', label: '其他' }
+  ],
+  bowelCount: [
+    { value: 0, label: '没有' },
+    { value: 1, label: '1 次' },
+    { value: 2, label: '2 次' },
+    { value: 3, label: '3 次' },
+    { value: 4, label: '4 次或更多' }
+  ],
+  bowelForm: [
+    { value: 1, label: '干硬、分离的小颗粒', description: '像坚果一样，一粒一粒' },
+    { value: 2, label: '香肠状，但结块明显', description: '较粗、较硬，有块状感' },
+    { value: 3, label: '香肠状，表面有裂纹', description: '基本成形，表面开裂' },
+    { value: 4, label: '光滑柔软的香肠状', description: '较顺滑、柔软，通常是最接近成形软便的形态' },
+    { value: 5, label: '柔软的小块', description: '边缘清楚，容易排出' },
+    { value: 6, label: '松散、糊状的小块', description: '形状不规则，偏稀' },
+    { value: 7, label: '水样', description: '几乎没有固体形状' }
   ]
 }
 
 export const QUESTIONS: CoreQuestion[] = [
-  { id: 'mood', parentId: null, phase: '今天', text: '今天心情怎么样？', helper: '只选最接近今天的感觉。', type: 'choice', options: OPTIONS.mood },
-  { id: 'energy', parentId: null, phase: '今天', text: '今天有精神吗？', helper: '想的是今天整体的精神与身体活力。', type: 'choice', options: OPTIONS.energy },
-  { id: 'drive', parentId: null, phase: '今天', text: '今天做事情容易开始吗？', helper: '不管最后做没做完，只看“开始行动”有多容易。', type: 'choice', options: OPTIONS.drive },
+  // —— 早晨：昨夜 + 晨起 ——
   {
-    id: 'sleep_quality', parentId: null, phase: '昨夜', text: '昨晚睡得怎么样？', type: 'choice', options: OPTIONS.sleepQuality
+    id: 'sleep_quality', parentId: null, phase: 'morning',
+    text: '昨晚睡得怎么样？', type: 'choice', options: OPTIONS.sleepQuality
   },
   {
-    id: 'sleep_duration_min', parentId: 'sleep_quality', phase: '昨夜', text: '昨晚大概睡了多久？', helper: '可以只选一个大概范围。', type: 'choice', options: OPTIONS.sleepDuration
+    id: 'sleep_duration_min', parentId: 'sleep_quality', phase: 'morning',
+    text: '昨晚大概睡了多久？', helper: '可以只选一个大概范围。', type: 'choice', options: OPTIONS.sleepDuration
   },
   {
-    id: 'sleep_problem', parentId: 'sleep_quality', phase: '昨夜', text: '主要哪里不太好？', helper: '可以多选。只选真正影响你的部分。', type: 'multiChoice',
+    id: 'sleep_problem', parentId: 'sleep_quality', phase: 'morning',
+    text: '主要哪里不太好？', helper: '可以多选。只选真正影响你的部分。', type: 'multiChoice',
     showWhen: { all: [{ field: 'sleep_quality', op: 'lte', value: 3 }] }, options: OPTIONS.sleepProblem
   },
   {
-    id: 'sleep_onset_reason', parentId: 'sleep_problem', phase: '昨夜', text: '昨晚是什么让你一直没睡着？', helper: '可以多选。', type: 'multiChoice',
+    id: 'sleep_onset_reason', parentId: 'sleep_problem', phase: 'morning',
+    text: '昨晚是什么让你一直没睡着？', helper: '可以多选。', type: 'multiChoice',
     showWhen: { all: [
       { field: 'sleep_quality', op: 'lte', value: 3 },
       { field: 'sleep_problem', op: 'includes', value: 'onset_slow' },
@@ -230,15 +276,18 @@ export const QUESTIONS: CoreQuestion[] = [
     ] }, options: OPTIONS.sleepOnsetReason
   },
   {
-    id: 'wake_fatigue', parentId: 'sleep_quality', phase: '昨夜', text: '今天醒来的时候感觉怎么样？', type: 'choice',
+    id: 'wake_fatigue', parentId: 'sleep_quality', phase: 'morning',
+    text: '今天醒来的时候感觉怎么样？', type: 'choice',
     showWhen: { all: [{ field: 'sleep_quality', op: 'lte', value: 3 }] }, options: OPTIONS.wakeFatigue
   },
   {
-    id: 'dream_memory', parentId: 'sleep_problem', phase: '昨夜', text: '这个梦你记得多清楚？', helper: '“没有印象”不等于没有做梦。', type: 'choice',
+    id: 'dream_memory', parentId: 'sleep_problem', phase: 'morning',
+    text: '这个梦你记得多清楚？', helper: '“没有印象”不等于没有做梦。', type: 'choice',
     showWhen: { all: [{ field: 'sleep_quality', op: 'lte', value: 3 }, { field: 'sleep_problem', op: 'includes', value: 'dream_tired' }] }, options: OPTIONS.dreamMemory
   },
   {
-    id: 'dream_fatigue', parentId: 'dream_memory', phase: '昨夜', text: '醒来后，这个梦让你觉得累吗？', type: 'choice',
+    id: 'dream_fatigue', parentId: 'dream_memory', phase: 'morning',
+    text: '醒来后，这个梦让你觉得累吗？', type: 'choice',
     showWhen: { all: [
       { field: 'sleep_quality', op: 'lte', value: 3 },
       { field: 'sleep_problem', op: 'includes', value: 'dream_tired' },
@@ -246,56 +295,155 @@ export const QUESTIONS: CoreQuestion[] = [
     ] }, options: OPTIONS.dreamFatigue
   },
   {
-    id: 'bedtime_urination_delay', parentId: 'sleep_problem', phase: '昨夜', text: '昨晚睡前，有没有因为想上厕所而延迟入睡？', helper: '指已经准备睡觉后，因为感觉有尿，不得不去厕所，导致入睡时间被推迟。', type: 'choice',
+    id: 'bedtime_urination_delay', parentId: 'sleep_problem', phase: 'morning',
+    text: '昨晚睡前，有没有因为想上厕所而延迟入睡？',
+    helper: '指已经准备睡觉后，因为感觉有尿，不得不去厕所，导致入睡时间被推迟。', type: 'choice',
     showWhen: { all: [{ field: 'sleep_quality', op: 'lte', value: 3 }, { field: 'sleep_problem', op: 'includes', value: 'urination' }] }, options: OPTIONS.bedtimeUrinationDelay
   },
   {
-    id: 'night_hunger_event', parentId: 'sleep_problem', phase: '昨夜', text: '昨晚有没有因为饿而睡不着或醒来？', type: 'choice',
+    id: 'night_hunger_event', parentId: 'sleep_problem', phase: 'morning',
+    text: '昨晚有没有因为饿而睡不着或醒来？', type: 'choice',
     showWhen: { all: [{ field: 'sleep_quality', op: 'lte', value: 3 }, { field: 'sleep_problem', op: 'includes', value: 'hunger' }] }, options: OPTIONS.nightHungerEvent
   },
   {
-    id: 'night_hunger_intake', parentId: 'night_hunger_event', phase: '昨夜', text: '后来吃东西了吗？', type: 'choice',
+    id: 'night_hunger_intake', parentId: 'night_hunger_event', phase: 'morning',
+    text: '后来吃东西了吗？', type: 'choice',
     showWhen: { all: [{ field: 'night_hunger_event', op: 'gte', value: 2 }] }, options: OPTIONS.nightHungerIntake
   },
   {
-    id: 'night_hunger_relief', parentId: 'night_hunger_intake', phase: '昨夜', text: '吃东西后，饥饿感缓解了吗？', type: 'choice',
+    id: 'night_hunger_relief', parentId: 'night_hunger_intake', phase: 'morning',
+    text: '吃东西后，饥饿感缓解了吗？', type: 'choice',
     showWhen: { all: [{ field: 'night_hunger_intake', op: 'gte', value: 1 }] }, options: OPTIONS.nightHungerRelief
   },
-
   {
-    id: 'nap_duration_min', parentId: null, phase: '白天 / 睡前', text: '今天午休了吗？', type: 'choice', options: OPTIONS.napDuration
+    id: 'bedtime_temperature_feeling', parentId: null, phase: 'morning',
+    text: '昨晚睡前，身体感觉怎么样？', type: 'choice', options: OPTIONS.bedtimeTemperature
+  },
+
+  // —— 晨起可量化数据 ——
+  {
+    id: 'morning_appetite', parentId: null, phase: 'morning',
+    text: '今天早上有胃口吗？', type: 'choice', options: OPTIONS.morningAppetite
   },
   {
-    id: 'nap_quality', parentId: 'nap_duration_min', phase: '白天 / 睡前', text: '这次午休睡得怎么样？', type: 'choice',
+    id: 'previous_evening_fullness', parentId: 'morning_appetite', phase: 'morning',
+    text: '昨晚睡前吃完东西是什么感觉？', type: 'choice', options: OPTIONS.previousEveningFullness,
+    showWhen: { all: [{ field: 'morning_appetite', op: 'lte', value: 1 }] }
+  },
+
+  // —— 晚上：白天总结 + 睡前 ——
+  {
+    id: 'mood', parentId: null, phase: 'evening',
+    text: '今天心情怎么样？', helper: '只选最接近今天整体状态的感觉。', type: 'choice', options: OPTIONS.mood
+  },
+  {
+    id: 'energy', parentId: null, phase: 'evening',
+    text: '今天有精神吗？', helper: '想的是今天整体的精神与身体活力。', type: 'choice', options: OPTIONS.energy
+  },
+  {
+    id: 'drive', parentId: null, phase: 'evening',
+    text: '今天做事情容易开始吗？', helper: '不管最后做没做完，只看“开始行动”有多容易。', type: 'choice', options: OPTIONS.drive
+  },
+  {
+    id: 'nap_duration_min', parentId: null, phase: 'evening',
+    text: '今天午休了吗？', type: 'choice', options: OPTIONS.napDuration
+  },
+  {
+    id: 'nap_quality', parentId: 'nap_duration_min', phase: 'evening',
+    text: '这次午休睡得怎么样？', type: 'choice',
     showWhen: { all: [{ field: 'nap_duration_min', op: 'gt', value: 0 }] }, options: OPTIONS.napQuality
   },
   {
-    id: 'bedtime_temperature_feeling', parentId: null, phase: '昨夜', text: '昨晚睡前，身体感觉怎么样？', type: 'choice', options: OPTIONS.bedtimeTemperature
-  }
-]
+    id: 'bedtime_hunger', parentId: null, phase: 'evening',
+    text: '现在睡前饿吗？', type: 'choice', options: OPTIONS.bedtimeHunger
+  },
+  {
+    id: 'physical_discomfort', parentId: null, phase: 'evening',
+    text: '今天身体舒服吗？', type: 'choice', options: OPTIONS.physicalDiscomfort
+  },
+  {
+    id: 'discomfort_area', parentId: 'physical_discomfort', phase: 'evening',
+    text: '哪里不舒服？', type: 'multiChoice', options: OPTIONS.discomfortArea,
+    showWhen: { all: [{ field: 'physical_discomfort', op: 'gte', value: 3 }] }
+  },
+  {
+    id: 'libido', parentId: null, phase: 'evening',
+    text: '今天的亲密需求和平时相比？', type: 'choice', options: OPTIONS.libido
+  },
 
-export const OPTIONAL_QUESTIONS: OptionalQuestion[] = [
-  { id: 'today_flag', label: '今天有没有什么特别明显的状态？', type: 'multiChoice', options: OPTIONS.recordingFlag },
-  { id: 'basal_temperature_c', label: '晨起体温', type: 'number', unit: '°C' },
-  { id: 'weight_kg', label: '体重', type: 'number', unit: 'kg' },
-  { id: 'morning_appetite', label: '今天早上有胃口吗？', type: 'choice', options: OPTIONS.morningAppetite },
-  { id: 'previous_evening_fullness', label: '昨晚睡前吃完东西是什么感觉？', type: 'choice', options: OPTIONS.previousEveningFullness,
-    showWhen: { all: [{ field: 'morning_appetite', op: 'lte', value: 1 }] } },
-  { id: 'bedtime_hunger', label: '现在睡前饿吗？', type: 'choice', options: OPTIONS.bedtimeHunger },
-  { id: 'libido', label: '今天的亲密需求和平时相比？', type: 'choice', options: OPTIONS.libido },
-  { id: 'cycle_gateway', label: '今天有明显的生理变化吗？', type: 'choice', options: OPTIONS.cycleGateway },
-  { id: 'bleeding_level', label: '今天出血多少？', type: 'choice', options: OPTIONS.bleedingLevel,
-    showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'bleeding' }] } },
-  { id: 'discharge_amount', label: '今天分泌物多少？', type: 'choice', options: OPTIONS.dischargeAmount,
-    showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'discharge' }] } },
-  { id: 'discharge_character', label: '更接近哪种？', type: 'multiChoice', options: OPTIONS.dischargeCharacter,
-    showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'discharge' }] } },
-  { id: 'physical_discomfort', label: '今天身体舒服吗？', type: 'choice', options: OPTIONS.physicalDiscomfort },
-  { id: 'discomfort_area', label: '哪里不舒服？', type: 'multiChoice', options: OPTIONS.discomfortArea,
-    showWhen: { all: [{ field: 'physical_discomfort', op: 'gte', value: 3 }] } },
-  { id: 'context_events', label: '今天有什么背景情况？', type: 'multiChoice', options: [
+  // —— 痤疮：拆成存在 / 严重程度 / 囊肿 / 部位 ——
+  {
+    id: 'acne_presence', parentId: null, phase: 'evening',
+    text: '今天有明显痤疮吗？', type: 'choice', options: OPTIONS.acnePresence
+  },
+  {
+    id: 'acne_severity', parentId: 'acne_presence', phase: 'evening',
+    text: '整体更接近哪种程度？', type: 'choice', options: OPTIONS.acneSeverity,
+    showWhen: { all: [{ field: 'acne_presence', op: 'eq', value: 'present' }] }
+  },
+  {
+    id: 'acne_cyst', parentId: 'acne_presence', phase: 'evening',
+    text: '今天有囊肿型痘痘吗？', type: 'choice', options: OPTIONS.acneCyst,
+    showWhen: { all: [{ field: 'acne_presence', op: 'eq', value: 'present' }] }
+  },
+  {
+    id: 'acne_locations', parentId: 'acne_presence', phase: 'evening',
+    text: '主要长在哪里？', helper: '可以多选。', type: 'multiChoice', options: OPTIONS.acneLocations,
+    showWhen: { all: [{ field: 'acne_presence', op: 'eq', value: 'present' }] }
+  },
+
+  // —— 月经 / 周期 ——
+  {
+    id: 'cycle_gateway', parentId: null, phase: 'evening',
+    text: '今天有明显的生理变化吗？', type: 'choice', options: OPTIONS.cycleGateway
+  },
+  {
+    id: 'bleeding_level', parentId: 'cycle_gateway', phase: 'evening',
+    text: '今天出血多少？', type: 'choice', options: OPTIONS.bleedingLevel,
+    showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'bleeding' }] }
+  },
+  {
+    id: 'period_start', parentId: 'bleeding_level', phase: 'evening',
+    text: '今天是不是这次月经的第 1 天？', helper: '如果以后回看时间线，可以用这个标记估算周期日。', type: 'choice', options: OPTIONS.periodStart,
+    showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'bleeding' }] }
+  },
+  {
+    id: 'discharge_amount', parentId: 'cycle_gateway', phase: 'evening',
+    text: '今天分泌物多少？', type: 'choice', options: OPTIONS.dischargeAmount,
+    showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'discharge' }] }
+  },
+  {
+    id: 'discharge_character', parentId: 'discharge_amount', phase: 'evening',
+    text: '更接近哪种？', type: 'multiChoice', options: OPTIONS.dischargeCharacter,
+    showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'discharge' }] }
+  },
+
+  // —— 饮食：保留一个可长期比较的蛋白质总量 ——
+  {
+    id: 'protein_intake_g', parentId: null, phase: 'evening',
+    text: '今天大概摄入了多少蛋白质？',
+    helper: '单位 g。估算即可，不需要追求精确；目标是看长期趋势。', type: 'number'
+  },
+
+  // —— 排便：晚间总结 ——
+  {
+    id: 'bowel_movement_count', parentId: null, phase: 'evening',
+    text: '今天大便了几次？', helper: '按今天全天的次数记录。', type: 'choice', options: OPTIONS.bowelCount
+  },
+  {
+    id: 'bowel_form', parentId: 'bowel_movement_count', phase: 'evening',
+    text: '今天主要是哪种形态？', helper: '按最接近的一次 / 主要形态选择，不必追求精确。', type: 'choice',
+    showWhen: { all: [{ field: 'bowel_movement_count', op: 'gt', value: 0 }] }, options: OPTIONS.bowelForm
+  },
+
+  {
+    id: 'today_flag', parentId: null, phase: 'evening',
+    text: '今天有没有什么特别明显的状态？', type: 'multiChoice', options: OPTIONS.recordingFlag
+  },
+  {
+    id: 'context_events', parentId: null, phase: 'evening',
+    text: '今天有什么背景情况？', type: 'multiChoice', options: [
       { value: 'slept_late', label: '熬夜 / 睡得很晚' },
-      { value: 'caffeine', label: '咖啡因较多' },
       { value: 'alcohol', label: '饮酒' },
       { value: 'exercise', label: '运动量很大' },
       { value: 'outdoors', label: '长时间户外' },
@@ -308,8 +456,18 @@ export const OPTIONAL_QUESTIONS: OptionalQuestion[] = [
       { value: 'full_dinner', label: '晚餐吃得很饱' },
       { value: 'light_dinner', label: '晚餐吃得少 / 较早' },
       { value: 'other', label: '其他' }
-    ] },
-  { id: 'note', label: '今天还有什么想留下的吗？', type: 'text', maxLength: 500 }
+    ]
+  },
+  {
+    id: 'note', parentId: null, phase: 'evening',
+    text: '今天还有什么想留下的吗？', type: 'text', maxLength: 500
+  }
+]
+
+export const OPTIONAL_QUESTIONS: OptionalQuestion[] = [
+  // 设备 / 自测的晨起数值仍然使用原来的字段名，便于兼容旧备份。
+  { id: 'basal_temperature_c', label: '晨起体温', type: 'number', phase: 'morning', unit: '°C' },
+  { id: 'weight_kg', label: '体重', type: 'number', phase: 'morning', unit: 'kg' }
 ]
 
 export const FIELD_MAP: Record<string, string> = {
@@ -320,13 +478,13 @@ export const FIELD_MAP: Record<string, string> = {
   wake_fatigue: 'wakeFatigue',
   dream_memory: 'dreamMemory',
   dream_fatigue: 'dreamFatigue',
-  nap_duration_min: 'napDurationMin',
-  nap_quality: 'napQuality',
   bedtime_urination_delay: 'bedtimeUrinationDelay',
   bedtime_temperature_feeling: 'bedtimeTemperatureFeeling',
   night_hunger_event: 'nightHungerEvent',
   night_hunger_intake: 'nightHungerIntake',
   night_hunger_relief: 'nightHungerRelief',
+  nap_duration_min: 'napDurationMin',
+  nap_quality: 'napQuality',
   today_flag: 'todayFlag',
   basal_temperature_c: 'basalTemperatureC',
   weight_kg: 'weightKg',
@@ -334,14 +492,22 @@ export const FIELD_MAP: Record<string, string> = {
   previous_evening_fullness: 'previousEveningFullness',
   bedtime_hunger: 'bedtimeHunger',
   libido: 'libido',
-  cycle_gateway: 'cycleGateway',
-  bleeding_level: 'bleedingLevel',
-  discharge_amount: 'dischargeAmount',
-  discharge_character: 'dischargeCharacter',
   physical_discomfort: 'physicalDiscomfort',
   discomfort_area: 'discomfortArea',
+  cycle_gateway: 'cycleGateway',
+  bleeding_level: 'bleedingLevel',
+  period_start: 'periodStart',
+  discharge_amount: 'dischargeAmount',
+  discharge_character: 'dischargeCharacter',
+  acne_presence: 'acnePresence',
+  acne_severity: 'acneSeverity',
+  acne_cyst: 'acneCyst',
+  acne_locations: 'acneLocations',
+  protein_intake_g: 'proteinIntakeG',
+  bowel_movement_count: 'bowelMovementCount',
+  bowel_form: 'bowelForm',
   context_events: 'contextEvents',
   note: 'note'
 }
 
-export const SCHEMA_VERSION = '0.6'
+export const SCHEMA_VERSION = '0.8'

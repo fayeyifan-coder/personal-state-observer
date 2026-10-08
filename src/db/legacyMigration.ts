@@ -1,4 +1,5 @@
-import type { DailyRecord } from '../types'
+// src/db/legacyMigration.ts
+import type { DailyRecord, ObservationPhase } from '../types'
 
 export type LegacyDailyRecord = Record<string, unknown>
 
@@ -11,13 +12,23 @@ const METADATA_KEYS = new Set<string>([
   'optedOutAt',
   'updatedAt',
   'currentPhase',
-  'lastQuestionId'
+  'lastQuestionId',
+  'morningStartedAt',
+  'morningCompletedAt',
+  'morningLastQuestionId',
+  'eveningStartedAt',
+  'eveningCompletedAt',
+  'eveningLastQuestionId'
 ])
 
-const LEGACY_PHASE_MAP: Record<string, DailyRecord['currentPhase']> = {
-  '今天': 'today',
-  '昨夜': 'sleep',
-  '白天 / 睡前': 'daytime'
+// V1.4 的旧 phase 名称不能直接写入 V1.5 的 ObservationPhase。
+// 这里按“观察发生在什么时候”迁移：昨夜数据由早晨回顾，今天/白天/睡前数据由晚上总结。
+const LEGACY_PHASE_MAP: Record<string, ObservationPhase> = {
+  '今天': 'evening',
+  '昨夜': 'morning',
+  '白天 / 睡前': 'evening',
+  morning: 'morning',
+  evening: 'evening'
 }
 
 function isValidRecordDate(dateString: unknown): dateString is string {
@@ -29,7 +40,6 @@ function isValidRecordDate(dateString: unknown): dateString is string {
   const year = Number(match[1])
   const month = Number(match[2])
   const day = Number(match[3])
-
   const date = new Date(Date.UTC(year, month - 1, day))
 
   return (
@@ -106,12 +116,23 @@ export function normalizeLegacyDailyRecord(
     optedOutAt: parseOptionalString(legacy.optedOutAt, 'optedOutAt'),
     updatedAt: legacy.updatedAt,
     currentPhase,
-    lastQuestionId: parseOptionalString(
-      legacy.lastQuestionId,
-      'lastQuestionId'
-    ),
+    lastQuestionId: parseOptionalString(legacy.lastQuestionId, 'lastQuestionId'),
+    morningStartedAt: null,
+    morningCompletedAt: null,
+    morningLastQuestionId: null,
+    eveningStartedAt: null,
+    eveningCompletedAt: null,
+    eveningLastQuestionId: null,
     answers
   }
+
+  // 兼容已经带两时段字段的中间版本数据。
+  record.morningStartedAt = parseOptionalString(legacy.morningStartedAt, 'morningStartedAt')
+  record.morningCompletedAt = parseOptionalString(legacy.morningCompletedAt, 'morningCompletedAt')
+  record.morningLastQuestionId = parseOptionalString(legacy.morningLastQuestionId, 'morningLastQuestionId')
+  record.eveningStartedAt = parseOptionalString(legacy.eveningStartedAt, 'eveningStartedAt')
+  record.eveningCompletedAt = parseOptionalString(legacy.eveningCompletedAt, 'eveningCompletedAt')
+  record.eveningLastQuestionId = parseOptionalString(legacy.eveningLastQuestionId, 'eveningLastQuestionId')
 
   for (const [key, value] of Object.entries(legacy)) {
     if (!METADATA_KEYS.has(key)) {

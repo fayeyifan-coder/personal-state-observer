@@ -1,17 +1,24 @@
+// src/services/backup.ts
 import { db } from '../db/database'
-import type { AppBackup, DailyRecord, PeriodLabel } from '../types'
+import type { AppBackup, DailyRecord, DeviceDailyData, PeriodLabel } from '../types'
 
 const BACKUP_FORMAT = 'personal-state-observer-backup' as const
+const CURRENT_SCHEMA_VERSION = '0.8'
 
-export function createBackup(records: DailyRecord[], labels: PeriodLabel[]): AppBackup {
+export function createBackup(
+  records: DailyRecord[],
+  labels: PeriodLabel[],
+  deviceData: DeviceDailyData[] = []
+): AppBackup {
   return {
     format: BACKUP_FORMAT,
     formatVersion: 1,
     appVersion: '1.5',
-    schemaVersion: '0.6',
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     dailyRecords: records,
     periodLabels: labels,
+    deviceData
   }
 }
 
@@ -27,6 +34,38 @@ export function downloadBackup(snapshot: AppBackup): void {
   anchor.click()
   anchor.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+function validateDeviceData(value: unknown): DeviceDailyData[] {
+  if (value === undefined || value === null) return []
+  if (!Array.isArray(value)) throw new Error('设备数据格式有问题。')
+
+  for (const item of value) {
+    if (!item || typeof item !== 'object') throw new Error('设备数据格式有问题。')
+
+    const data = item as Partial<DeviceDailyData>
+    if (
+      typeof data.id !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(data.recordDate ?? '') ||
+      (data.source !== 'manual' && data.source !== 'huawei-health')
+    ) {
+      throw new Error('设备数据的日期或来源格式有问题。')
+    }
+
+    for (const field of ['sleepDurationMin', 'steps', 'heartRateAvg', 'weightKg'] as const) {
+      const fieldValue = data[field]
+      if (fieldValue !== null && fieldValue !== undefined &&
+        (typeof fieldValue !== 'number' || !Number.isFinite(fieldValue))) {
+        throw new Error(`设备数据字段 ${field} 格式有问题。`)
+      }
+    }
+
+    if (typeof data.createdAt !== 'string' || typeof data.updatedAt !== 'string') {
+      throw new Error('设备数据时间字段格式有问题。')
+    }
+  }
+
+  return value as DeviceDailyData[]
 }
 
 export function parseBackup(value: unknown): AppBackup {
@@ -65,22 +104,37 @@ export function parseBackup(value: unknown): AppBackup {
     }
   }
 
-  return data as AppBackup
+  return {
+    ...(data as AppBackup),
+    deviceData: validateDeviceData(data.deviceData)
+  }
 }
 
 export async function readAllData() {
-  const [dailyRecords, periodLabels] = await Promise.all([
+  const [dailyRecords, periodLabels, deviceData] = await Promise.all([
     db.dailyRecords.orderBy('recordDate').toArray(),
     db.periodLabels.orderBy('startDate').toArray(),
+    db.deviceDailyData.orderBy('recordDate').toArray()
   ])
-  return { dailyRecords, periodLabels }
+  return { dailyRecords, periodLabels, deviceData }
 }
 
 export async function restoreBackup(snapshot: AppBackup): Promise<void> {
-  await db.transaction('rw', db.dailyRecords, db.periodLabels, async () => {
+  const deviceData = snapshot.deviceData ?? []
+
+  await db.transaction('rw', db.dailyRecords, db.periodLabels, db.deviceDailyData, async () => {
     await db.dailyRecords.clear()
     await db.periodLabels.clear()
-    if (snapshot.dailyRecords.length) await db.dailyRecords.bulkPut(snapshot.dailyRecords)
-    if (snapshot.periodLabels.length) await db.periodLabels.bulkPut(snapshot.periodLabels)
+    await db.deviceDailyData.clear()
+
+    if (snapshot.dailyRecords.length) {
+      await db.dailyRecords.bulkPut(snapshot.dailyRecords)
+    }
+    if (snapshot.periodLabels.length) {
+      await db.periodLabels.bulkPut(snapshot.periodLabels)
+    }
+    if (deviceData.length) {
+      await db.deviceDailyData.bulkPut(deviceData)
+    }
   })
 }

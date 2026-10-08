@@ -4,12 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "tsc -b && vite build",
-  "preview": "vite preview",
-  "test:logic": "tsx tests/logic-tests.ts",
-  "test:preview": "tsx tests/migration-preview-tests.ts"
-},
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test:logic": "tsx tests/logic-tests.ts && tsx tests/data-contract-tests.ts",
+    "test:contract": "tsx tests/data-contract-tests.ts",
+    "test:analysis": "tsx tests/analysis-tests.ts",
+    "test:preview": "tsx tests/migration-preview-tests.ts"
+  },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "dexie": "latest",
