@@ -2,11 +2,12 @@ name: Daily Bark Reminder
 
 on:
   schedule:
-    # 定时任务：cron 表达式使用的是 UTC 时间。
-    # 定时任务：cron 表达式使用 UTC 时间。
-    # UTC 00:00 = 北京时间 08:00（早上8点）。
+    # GitHub Actions cron 使用 UTC。
+    # 北京时间 08:00 = UTC 00:00。
+    # 北京时间 21:00 = UTC 13:00。
     - cron: '0 0 * * *'
-  workflow_dispatch: # 加上这个，允许你在 GitHub 网页上手动点击运行，方便随时测试
+    - cron: '0 13 * * *'
+  workflow_dispatch:
 
 jobs:
   remind:
@@ -15,22 +16,31 @@ jobs:
       - name: Send Bark Notification
         env:
           BARK_KEY: ${{ secrets.BARK_KEY }}
+          SCHEDULE: ${{ github.event.schedule }}
         run: |
           if [ -z "$BARK_KEY" ]; then
             echo "错误：未找到 BARK_KEY，请去仓库 Settings 配置"
             exit 1
           fi
 
-          # 请将下方引号内的链接，替换为你实际部署上线的网页地址 (例如 GitHub Pages 地址)
-          # 这样你点击手机通知时，就能直接跳到日记页面
           APP_URL="https://fayeyifan-coder.github.io/personal-state-observer/"
 
-          # 使用 POST 方式调用 Bark，直接发送 JSON，完美解决中文编码问题
+          if [ "$SCHEDULE" = "0 0 * * *" ]; then
+            TITLE="私人观察台 · 早晨观察"
+            BODY="早晨观察时间到了。记录昨夜睡眠和今天醒来时的状态。"
+          elif [ "$SCHEDULE" = "0 13 * * *" ]; then
+            TITLE="私人观察台 · 晚间总结"
+            BODY="晚间总结时间到了。留下今天的情绪、身体状态和生活痕迹。"
+          else
+            TITLE="私人观察台 · 测试"
+            BODY="今天的你是什么样子？打开私人观察台，留下记录吧。"
+          fi
+
           curl -X POST "https://api.day.app/push" \
             -H "Content-Type: application/json; charset=utf-8" \
             -d "{
               \"device_key\": \"$BARK_KEY\",
-              \"title\": \"私人观察台\",
-              \"body\": \"今天的你是什么样子？花一分钟留下记录吧。\",
+              \"title\": \"$TITLE\",
+              \"body\": \"$BODY\",
               \"url\": \"$APP_URL\"
             }"
