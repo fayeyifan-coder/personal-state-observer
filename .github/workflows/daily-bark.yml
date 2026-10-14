@@ -4,9 +4,9 @@ on:
   schedule:
     # GitHub Actions cron 使用 UTC。
     # 北京时间 08:17 = UTC 00:17。
-    # 北京时间 21:17 = UTC 13:17。
+    # 北京时间 22:17 = UTC 14:17。
     - cron: '17 0 * * *'
-    - cron: '17 13 * * *'
+    - cron: '17 14 * * *'
   workflow_dispatch:
 
 jobs:
@@ -28,7 +28,7 @@ jobs:
           if [ "$SCHEDULE" = "17 0 * * *" ]; then
             TITLE="私人观察台 · 早晨观察"
             BODY="早晨观察时间到了。记录昨夜睡眠和今天醒来时的状态。"
-          elif [ "$SCHEDULE" = "17 13 * * *" ]; then
+          elif [ "$SCHEDULE" = "17 14 * * *" ]; then
             TITLE="私人观察台 · 晚间总结"
             BODY="晚间总结时间到了。留下今天的情绪、身体状态和生活痕迹。"
           else
