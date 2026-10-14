@@ -3,10 +3,10 @@ name: Daily Bark Reminder
 on:
   schedule:
     # GitHub Actions cron 使用 UTC。
-    # 北京时间 08:00 = UTC 00:00。
-    # 北京时间 21:00 = UTC 13:00。
-    - cron: '0 0 * * *'
-    - cron: '0 13 * * *'
+    # 北京时间 08:17 = UTC 00:17。
+    # 北京时间 21:17 = UTC 13:17。
+    - cron: '17 0 * * *'
+    - cron: '17 13 * * *'
   workflow_dispatch:
 
 jobs:
@@ -25,10 +25,10 @@ jobs:
 
           APP_URL="https://fayeyifan-coder.github.io/personal-state-observer/"
 
-          if [ "$SCHEDULE" = "0 0 * * *" ]; then
+          if [ "$SCHEDULE" = "17 0 * * *" ]; then
             TITLE="私人观察台 · 早晨观察"
             BODY="早晨观察时间到了。记录昨夜睡眠和今天醒来时的状态。"
-          elif [ "$SCHEDULE" = "0 13 * * *" ]; then
+          elif [ "$SCHEDULE" = "17 13 * * *" ]; then
             TITLE="私人观察台 · 晚间总结"
             BODY="晚间总结时间到了。留下今天的情绪、身体状态和生活痕迹。"
           else
