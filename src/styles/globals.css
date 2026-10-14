@@ -309,6 +309,8 @@ textarea{
 .calendar-day.has-record{border-color:var(--line)}
 .calendar-day.is-today{outline:1px solid var(--olive);outline-offset:-1px}
 .calendar-date{font-size:11px}
+.calendar-date-disabled{color:var(--line-strong);cursor:default}
+.calendar-day.is-future{opacity:.55}
 .calendar-mark{color:var(--line-strong);font-size:12px;line-height:1}
 .calendar-mark.status-recorded{color:var(--olive)}
 .calendar-mark.status-opted_out{color:var(--muted)}

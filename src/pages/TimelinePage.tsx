@@ -396,11 +396,13 @@ export function TimelinePage() {
                 const record = recordMap.get(day)
                 const mood = getNumber(record, 'mood')
                 const sleep = getNumber(record, 'sleepDurationMin')
-                const isToday = day === getLocalDateKey()
+                const today = getLocalDateKey()
+                const isToday = day === today
+                const isFuture = day > today
                 const device = deviceMap.get(day)
                 return (
-                  <div className={`calendar-day refined-day ${record ? 'has-record' : ''} ${isToday ? 'is-today' : ''}`} key={day} title={formatDay(day)}>
-                    <a href={`#/record?date=${day}&phase=morning`} className="calendar-date">{Number(day.slice(-2))}</a>
+                  <div className={`calendar-day refined-day ${record ? 'has-record' : ''} ${isToday ? 'is-today' : ''} ${isFuture ? 'is-future' : ''}`} key={day} title={formatDay(day)}>
+                    {isFuture ? <span className="calendar-date calendar-date-disabled" aria-label={`${formatDay(day)} 尚不可补记`}>{Number(day.slice(-2))}</span> : <a href={`#/record?date=${day}&phase=morning`} className="calendar-date">{Number(day.slice(-2))}</a>}
                     <span className={record ? `calendar-mark status-${record.recordingStatus}` : 'calendar-mark'}>{record ? statusSymbol(record.recordingStatus) : '·'}</span>
                     <span className="calendar-mood">{mood == null ? ' ' : mood}</span>
                     {isPeriodStart(record) && <span style={{ fontSize: 8, color: 'var(--olive)' }}>经1</span>}
