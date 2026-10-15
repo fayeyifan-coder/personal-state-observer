@@ -127,7 +127,9 @@ function refreshOverallStatus(record: DailyRecord): DailyRecord {
 }
 
 export function RecordPage() {
-  const route = useMemo(parseRoute, [])
+  // App re-renders on hash changes; derive the route again so switching
+  // between morning and evening for the same date updates this page.
+  const route = useMemo(parseRoute, [window.location.hash])
   const [record, setRecord] = useState<DailyRecord>(() => createDailyRecord(route.recordDate))
   const [loading, setLoading] = useState(true)
   const [questionId, setQuestionId] = useState<string | null>(null)
