@@ -10,7 +10,8 @@
     "test:logic": "tsx tests/logic-tests.ts && tsx tests/data-contract-tests.ts",
     "test:contract": "tsx tests/data-contract-tests.ts",
     "test:analysis": "tsx tests/analysis-tests.ts",
-    "test:preview": "tsx tests/migration-preview-tests.ts"
+    "test:preview": "tsx tests/migration-preview-tests.ts",
+    "test:backup-comparison": "tsx tests/backup-comparison-tests.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
