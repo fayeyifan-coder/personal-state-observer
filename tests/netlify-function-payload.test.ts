@@ -118,7 +118,15 @@ assert.equal(response.status, 201,
   'bounded near-limit JSON still follows existing publish workflow')
 assert.equal(commits, 1)
 
-stored = over as SyncSnapshotV1
+// A POST over its limit does not necessarily mean the smaller snapshot
+// subobject is also too large. Model a genuinely oversized legacy DB row.
+const legacyOversized = {
+  ...over, encrypted: {
+    ...over.encrypted, ciphertext: over.encrypted.ciphertext + 'A'.repeat(2048)
+  }
+}
+assert.ok(serializedSyncJsonBytes(legacyOversized) > MAX_SYNC_RESPONSE_BYTES)
+stored = legacyOversized as SyncSnapshotV1
 response = await handler(new Request(origin + '/api/sync/snapshots/' + uuid))
 assert.equal(response.status, 503, 'legacy >5 MiB rows cannot exceed buffered response limit')
 assert.equal((await response.json()).error, 'snapshot-exceeds-host-limit')
