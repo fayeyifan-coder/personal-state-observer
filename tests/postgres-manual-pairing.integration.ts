@@ -6,6 +6,10 @@ import {
 } from '../src/server/manualPairingProtocol'
 import { createPostgresManualPairingStore } from '../src/server/postgresManualPairingStore'
 import { createPostgresPublisherProofStore } from '../src/server/postgresPublisherProofStore'
+import {
+  createSignedOperatorPairingGate, operatorCommandBytes,
+  type OperatorCommand
+} from '../src/server/signedOperatorPairingGate'
 
 if (process.env.PGHOST !== '127.0.0.1' ||
     process.env.PGDATABASE !== 'sync_fixture_test') {
@@ -48,11 +52,39 @@ async function sign(pending: NonNullable<Awaited<ReturnType<typeof workflow.requ
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+const operatorKeys = await crypto.subtle.generateKey(
+  { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']
+)
+const operatorPublicKey = await crypto.subtle.exportKey('jwk', operatorKeys.publicKey)
+const gate = createSignedOperatorPairingGate(pool, {
+  enabled: true, expectedSiteId: siteId, operatorPublicKey
+})
+async function signedAction(
+  action: 'approve-publisher' | 'revoke-publisher',
+  requestId: string, targetDeviceId: string, fingerprint: string,
+  targetOwnerId = ownerId
+) {
+  const command: OperatorCommand = {
+    version: 1, action, siteId, ownerId: targetOwnerId,
+    requestId, deviceId: targetDeviceId, fingerprint,
+    nonce: crypto.randomUUID(), issuedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 90_000).toISOString()
+  }
+  const signature = Buffer.from(await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    operatorKeys.privateKey, operatorCommandBytes(command)
+  )).toString('base64url')
+  return gate.apply(command, signature)
+}
+
 try {
   // Fixture runner must use a new, isolated Postgres service.
   await pool.query(readFileSync('docs/sql-drafts/20261028151000_sync_schema.sql', 'utf8'))
   await pool.query(readFileSync('docs/sql-drafts/20261028163500_device_proof_schema.sql', 'utf8'))
   await pool.query(readFileSync('docs/sql-drafts/20261028191000_pending_pairing.sql', 'utf8'))
+  await pool.query(readFileSync('docs/sql-drafts/20261028203000_operator_signed_actions.sql', 'utf8'))
+  assert.equal('approveByOperator' in store, false, 'unsigned approval API must not exist')
+  assert.equal('revokeByOperator' in store, false, 'unsigned revocation API must not exist')
 
   const first = await makeKey()
   const phoneA = crypto.randomUUID(), phoneB = crypto.randomUUID()
@@ -62,8 +94,8 @@ try {
     'no auto-register on request')
   assert.equal(await workflow.request(phoneB, first.publicJwk), null,
     'other device cannot replace existing pending candidate')
-  assert.equal(await store.approveByOperator(subject, pending!.requestId,
-    pending!.fingerprint), 'not-proven')
+  assert.equal(await signedAction('approve-publisher', pending!.requestId,
+    phoneA, pending!.fingerprint), 'not-eligible', 'unproved candidate cannot be signed into approval')
   assert.equal(await workflow.prove(pending!.requestId,
     await sign(pending!, phoneA, first.keys.privateKey)), true)
   assert.equal(await workflow.prove(pending!.requestId,
@@ -71,20 +103,20 @@ try {
     'proof is one-time')
   assert.equal(await proof.getRegisteredPublisher(subject, phoneA), null,
     'cryptographic proof still does not self-approve')
-  assert.equal(await store.approveByOperator(subject, pending!.requestId,
-    'f'.repeat(64)), 'invalid-or-expired', 'operator must compare fingerprint')
-  assert.equal(await store.approveByOperator('netlify:' + siteId + ':other-owner',
-    pending!.requestId, pending!.fingerprint), 'invalid-or-expired',
+  assert.equal(await signedAction('approve-publisher', pending!.requestId,
+    phoneA, 'f'.repeat(64)), 'not-eligible', 'operator fingerprint must match DB')
+  assert.equal(await signedAction('approve-publisher', pending!.requestId,
+    phoneA, pending!.fingerprint, 'other-owner'), 'not-eligible',
     'approval scoped to verified owner')
   const candidate = await store.read(subject, pending!.requestId)
   assert.equal(candidate?.provedAt instanceof Date, true)
   assert.equal(candidate?.fingerprint, pending!.fingerprint)
 
   const competing = await Promise.all([
-    store.approveByOperator(subject, pending!.requestId, pending!.fingerprint),
-    store.approveByOperator(subject, pending!.requestId, pending!.fingerprint)
+    signedAction('approve-publisher', pending!.requestId, phoneA, pending!.fingerprint),
+    signedAction('approve-publisher', pending!.requestId, phoneA, pending!.fingerprint)
   ])
-  assert.deepEqual(competing.sort(), ['approved', 'invalid-or-expired'],
+  assert.deepEqual(competing.sort(), ['approved', 'not-eligible'],
     'two concurrent approvals of same candidate cannot double-register')
   assert.equal((await proof.getRegisteredPublisher(subject, phoneA))?.revoked, false)
   assert.equal(await workflow.request(phoneB, first.publicJwk), null,
@@ -92,15 +124,15 @@ try {
   assert.ok((await proof.issueChallenge(subject, phoneA, 90))?.nonce,
     'approved device can obtain challenge')
 
-  assert.equal(await store.revokeByOperator(subject, phoneB), false,
-    'wrong phone cannot revoke current publisher')
-  assert.equal(await store.revokeByOperator(subject, phoneA), true,
-    'operator can revoke approved device')
+  assert.equal(await signedAction('revoke-publisher', crypto.randomUUID(), phoneB,
+    pending!.fingerprint), 'not-eligible', 'wrong phone cannot revoke current publisher')
+  assert.equal(await signedAction('revoke-publisher', crypto.randomUUID(), phoneA,
+    pending!.fingerprint), 'revoked', 'independently signed operator revokes device')
   assert.equal((await proof.getRegisteredPublisher(subject, phoneA))?.revoked, true)
   assert.equal(await proof.issueChallenge(subject, phoneA, 90), null,
     'revoked phone cannot receive new publishing challenge')
-  assert.equal(await store.revokeByOperator(subject, phoneA), false,
-    'duplicate revoke is safely declined')
+  assert.equal(await signedAction('revoke-publisher', crypto.randomUUID(), phoneA,
+    pending!.fingerprint), 'not-eligible', 'duplicate revoke is safely declined')
 
   const other = await makeKey()
   const replacement = await workflow.request(phoneB, other.publicJwk)
@@ -110,8 +142,8 @@ try {
     'old phone key cannot prove replacement')
   assert.equal(await workflow.prove(replacement!.requestId,
     await sign(replacement!, phoneB, other.keys.privateKey)), true)
-  assert.equal(await store.approveByOperator(subject, replacement!.requestId,
-    replacement!.fingerprint), 'approved')
+  assert.equal(await signedAction('approve-publisher', replacement!.requestId,
+    phoneB, replacement!.fingerprint), 'approved')
   assert.equal((await proof.getRegisteredPublisher(subject, phoneB))?.revoked, false)
   assert.equal((await proof.getRegisteredPublisher(subject, phoneA))?.revoked, true)
 
@@ -120,7 +152,7 @@ try {
     'WHERE subject=$1 AND revoked_at IS NULL', [subject]
   )
   assert.equal(results.rows[0].active, 1)
-  console.log('[PASS] ephemeral Postgres: manual paired proof, concurrent operator approval, revocation and replacement')
+  console.log('[PASS] ephemeral PG: signed-only pairing, concurrency, revocation and replacement')
 } finally {
   await pool.end()
 }
