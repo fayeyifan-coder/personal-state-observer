@@ -15,6 +15,7 @@ import {
 } from '../db/records'
 import type { DailyRecord, DeviceDailyData, PeriodLabel } from '../types'
 import { getLocalDateKey } from '../utils/dateUtils'
+import { buildWorkspaceSnapshot, WORKSPACE_METRIC_LABELS, type WorkspaceMetric } from '../services/workspaceSnapshot'
 
 function emptyDeviceForm(date = getLocalDateKey()) {
   return {
@@ -46,6 +47,14 @@ export function DataPage() {
   const [deviceForm, setDeviceForm] = useState(emptyDeviceForm())
   const [editingDeviceDate, setEditingDeviceDate] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [workspaceFrom, setWorkspaceFrom] = useState(() => {
+    const date = new Date()
+    date.setDate(date.getDate() - 29)
+    return getLocalDateKey(date)
+  })
+  const [workspaceThrough, setWorkspaceThrough] = useState(() => getLocalDateKey())
+  // Never silently select health attributes to share.
+  const [workspaceMetrics, setWorkspaceMetrics] = useState<WorkspaceMetric[]>([])
 
   const refresh = async () => {
     setLoading(true)
@@ -82,6 +91,34 @@ export function DataPage() {
       setMessage('备份文件已生成。')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '导出失败。')
+    }
+  }
+
+  function handleWorkspaceExport() {
+    try {
+      setMessage('')
+      setError('')
+      const snapshot = buildWorkspaceSnapshot(records, {
+        from: workspaceFrom,
+        through: workspaceThrough,
+        metrics: workspaceMetrics,
+        generatedAt: new Date().toISOString()
+      })
+      // Distinct from a full recoverable backup. NEVER use restoreBackup on it.
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+        type: 'application/json'
+      })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `personal-workspace-observer-${workspaceFrom}-${workspaceThrough}.json`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setMessage(`只读摘要已生成：${snapshot.data.totalRecordDays} 天；请自行妥善保存，不要上传到公开仓库。`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '只读摘要导出失败。')
     }
   }
 
@@ -310,6 +347,47 @@ export function DataPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </section>
+
+          <section className="data-section">
+            <div className="section-heading"><span>个人工作台 · 只读摘要</span><span>手动导出</span></div>
+            <div className="data-card">
+              <h2>给个人观察室的数值摘要</h2>
+              <p>只包含你选中的日期与指标，不含原始问卷、日记原文、月经周期、姓名或记录 ID。不会自动推送或调用 API。生成的 JSON 仍是敏感健康数据，请仅在自己的设备间传递。</p>
+              <div className="data-form">
+                <label>
+                  <span>开始日期</span>
+                  <input type="date" value={workspaceFrom}
+                    onChange={event => setWorkspaceFrom(event.target.value)} />
+                </label>
+                <label>
+                  <span>结束日期</span>
+                  <input type="date" value={workspaceThrough}
+                    onChange={event => setWorkspaceThrough(event.target.value)} />
+                </label>
+              </div>
+              <fieldset style={{ border: '0', padding: 0, margin: '1rem 0' }}>
+                <legend>选择要交给个人工作台的指标（默认不选）</legend>
+                <div className="data-form">
+                  {(Object.entries(WORKSPACE_METRIC_LABELS) as [WorkspaceMetric, string][]).map(([key, label]) => (
+                    <label key={key} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input type="checkbox" checked={workspaceMetrics.includes(key)}
+                        onChange={event => setWorkspaceMetrics(previous =>
+                          event.target.checked
+                            ? [...previous, key]
+                            : previous.filter(metric => metric !== key)
+                        )} />
+                      <span>{label}{key === 'sleepDurationBand' ? '（区间，不是精确分钟）' : ''}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="stack inline-actions">
+                <button className="primary" disabled={workspaceMetrics.length === 0}
+                  onClick={handleWorkspaceExport}>导出工作台只读摘要 JSON</button>
+              </div>
+              <p>这是个人观察室的独立数据交换文件，不能用于恢复手机记录。完整数据备份请使用下方的“导出 JSON 备份”。</p>
             </div>
           </section>
 
