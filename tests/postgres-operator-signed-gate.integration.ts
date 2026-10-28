@@ -144,7 +144,8 @@ try {
   assert.equal((await deviceProof.getRegisteredPublisher(subject, phoneId))?.revoked, false)
   assert.equal(await gate.apply(approved, validSignature), 'replayed')
   const actionsAfterApproval = await pool.query(
-    'SELECT count(*)::int AS n FROM sync_operator_actions WHERE subject=$1',
+    "SELECT count(*)::int AS n FROM sync_operator_actions " +
+    "WHERE subject=$1 AND result='approved'",
     [subject]
   )
   assert.equal(actionsAfterApproval.rows[0].n, 1)
