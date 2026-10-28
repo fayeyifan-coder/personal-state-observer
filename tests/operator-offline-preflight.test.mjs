@@ -19,7 +19,7 @@ test('public offline self-test runs with zero input or output files',()=>{
   const r=run(selftest)
   assert.equal(r.status,0,r.stderr)
   assert.match(r.stdout,/PASS：14 项离线虚构安全自检/)
-  assert.match(r.stdout,/未读取或写入任何文件/)
+  assert.match(r.stdout,/未读写任何用户数据、备份或凭据文件/)
   const denied=run(selftest,['--passphrase','secret'])
   assert.notEqual(denied.status,0)
   assert.doesNotMatch(denied.stdout,/PASS/)
