@@ -107,6 +107,9 @@ function validateEncryptedBackup(value: unknown): EncryptedBackupV1 {
     data.ciphertext.length < 24) {
     throw new Error('加密备份内容长度异常。')
   }
+  if (data.salt.length !== 24 || data.iv.length !== 16) {
+    throw new Error('加密备份的随机参数长度不正确。')
+  }
   base64ToBytes(data.salt, 16)
   base64ToBytes(data.iv, 12)
   return data as EncryptedBackupV1
@@ -137,4 +140,19 @@ export async function decryptBackup(value: unknown, passphrase: string): Promise
   } catch {
     throw new Error('解密文件不是有效的 JSON 备份。')
   }
+}
+
+
+/** Save the ciphertext only; the password never enters the file. */
+export function downloadEncryptedBackup(snapshot: EncryptedBackupV1): void {
+  const blob = new Blob([JSON.stringify(snapshot)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'personal-state-observer-encrypted-' +
+    new Date().toISOString().slice(0, 10) + '.json'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
