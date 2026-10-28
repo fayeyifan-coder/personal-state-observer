@@ -90,7 +90,6 @@ function promptSecret(label) {
   if(!stdin.isTTY||!stdout.isTTY||typeof stdin.setRawMode!=='function') {
     fail('安全口令输入需要本机交互式终端，不允许管道或环境变量传入')
   }
-  stdout.write(label)
   return new Promise((resolve,reject)=>{
     let answer=''
     const rawWas=stdin.isRaw
@@ -113,6 +112,9 @@ function promptSecret(label) {
     stdin.setRawMode(true)
     stdin.resume()
     stdin.on('keypress',onKey)
+    // Publish the prompt only AFTER terminal echo has been disabled.
+    // A fast password paste can otherwise race the setRawMode call.
+    stdout.write(label)
   })
 }
 function show(c){
