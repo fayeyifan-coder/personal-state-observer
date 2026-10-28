@@ -1,0 +1,63 @@
+name: Verify private-context identity and phone proof (synthetic only)
+
+on:
+  push:
+    branches:
+      - feat/private-context-device-proof-20261028
+  pull_request:
+    branches:
+      - feat/pg-sync-adapter-draft-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  proof-and-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sync_fixture_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d sync_fixture_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 8
+    env:
+      PGHOST: 127.0.0.1
+      PGDATABASE: sync_fixture_test
+      PGUSER: test_user
+      PGPASSWORD: test_password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Check existing offline data and sync logic
+        run: |
+          npm run test:logic
+          npm run test:analysis
+          npm run test:backup-comparison
+          npm run test:backup-restore-policy
+          npm run test:encrypted-backup
+          npm run test:sync-protocol
+          npm run test:sync-service
+      - name: Verify trusted Netlify context and signed phone key
+        run: npm run test:private-device-auth
+      - name: Typecheck and production build without deploying
+        run: npm run build
+      - name: Install disposable Postgres driver for CI fixtures only
+        run: npm install --no-save --package-lock=false pg@8
+      - name: Verify encrypted sync snapshot transactions
+        run: npx tsx tests/postgres-sync.integration.ts
+      - name: Verify stored P256 key, nonce consumption, revocation
+        run: npx tsx tests/postgres-device-proof.integration.ts

@@ -15,7 +15,9 @@
     "test:backup-restore-policy": "tsx tests/backup-restore-policy-tests.ts",
     "test:encrypted-backup": "tsx tests/encrypted-backup-tests.ts",
     "test:sync-protocol": "tsx tests/sync-envelope-tests.ts && tsx tests/sync-protocol-tests.ts",
-    "test:sync-service": "tsx tests/guarded-sync-service-tests.ts"
+    "test:sync-service": "tsx tests/guarded-sync-service-tests.ts",
+    "test:device-proof": "tsx tests/private-project-device-auth-tests.ts",
+    "test:private-device-auth": "tsx tests/private-project-device-auth-tests.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
