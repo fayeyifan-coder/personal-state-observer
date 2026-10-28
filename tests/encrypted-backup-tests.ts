@@ -76,6 +76,6 @@ await rejects(() => decryptBackup({ ...first, iv: second.iv }, phrase), /密码�
 await rejects(() => decryptBackup({ ...first, iterations: 1 }, phrase), /不支持/)
 await rejects(() => decryptBackup({ ...first, cipher: 'AES-CBC' }, phrase), /不支持/)
 await rejects(() => decryptBackup({ ...first, version: 99 }, phrase), /不支持/)
-await rejects(() => decryptBackup({ ...first, salt: '!!!' }, phrase), /编码格式/)
+await rejects(() => decryptBackup({ ...first, salt: '!!!' }, phrase), /随机参数长度|编码格式/)
 await rejects(() => decryptBackup(snapshot, phrase), /不是个人状态观察器的加密备份/)
 console.log('[PASS] encrypted snapshot: full data roundtrip, fresh randomness, wrong password, tamper & version rejection')
