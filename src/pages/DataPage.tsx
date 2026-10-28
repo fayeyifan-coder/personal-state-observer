@@ -6,14 +6,16 @@ import {
   downloadBackup,
   parseBackup,
   readAllData,
-  restoreBackup,
+  restoreBackupIfCompatible,
 } from '../services/backup'
+import { compareBackupCollections, type BackupComparison } from '../services/backupComparison'
+import { canSafelyReplaceWithBackup, getRestoreBlockReasons } from '../services/backupRestorePolicy'
 import {
   deleteDeviceDay,
   getDeviceDay,
   saveDeviceDay,
 } from '../db/records'
-import type { DailyRecord, DeviceDailyData, PeriodLabel } from '../types'
+import type { AppBackup, DailyRecord, DeviceDailyData, PeriodLabel } from '../types'
 import { getLocalDateKey } from '../utils/dateUtils'
 
 function emptyDeviceForm(date = getLocalDateKey()) {
@@ -46,6 +48,13 @@ export function DataPage() {
   const [deviceForm, setDeviceForm] = useState(emptyDeviceForm())
   const [editingDeviceDate, setEditingDeviceDate] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const latestImportRequest = useRef(0)
+  const [backupPreview, setBackupPreview] = useState<{
+    filename: string
+    snapshot: AppBackup
+    comparison: BackupComparison
+  } | null>(null)
+  const [restoreBusy, setRestoreBusy] = useState(false)
 
   const refresh = async () => {
     setLoading(true)
@@ -74,37 +83,71 @@ export function DataPage() {
     0,
   )
 
-  function handleExport() {
+  async function handleExport() {
     try {
       setError('')
-      const backup = createBackup(records, labels, deviceData)
-      downloadBackup(backup)
-      setMessage('备份文件已生成。')
+      // Always export a fresh IndexedDB snapshot rather than cached page state.
+      const current = await readAllData()
+      downloadBackup(createBackup(current.dailyRecords, current.periodLabels, current.deviceData))
+      setMessage('本机备份已生成，请保留旧版本。')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '导出失败。')
     }
   }
 
-  async function handleRestore(file: File) {
+  async function handlePreviewBackup(file: File) {
+    const request = ++latestImportRequest.current
+    setBackupPreview(null)
+    setError('')
+    setMessage('正在本机检查备份差异……')
     try {
-      setError('')
-      setMessage('正在检查备份……')
       const parsed = JSON.parse(await file.text())
-      const backup = parseBackup(parsed)
-      const deviceCount = backup.deviceData?.length ?? 0
-      const ok = window.confirm(
-        `这个备份包含 ${backup.dailyRecords.length} 条每日记录、${backup.periodLabels.length} 个时期标记和 ${deviceCount} 条设备数据。\n\n恢复后会替换当前设备上的全部记录。确定继续吗？`,
-      )
-      if (!ok) {
-        setMessage('已取消恢复。')
-        return
-      }
-      await restoreBackup(backup)
+      const snapshot = parseBackup(parsed)
+      const current = await readAllData()
+      if (request !== latestImportRequest.current) return
+      const comparison = compareBackupCollections(current, snapshot)
+      setBackupPreview({ filename: file.name, snapshot, comparison })
+      setMessage('只读比对已完成。没有导入或修改任何记录。')
+    } catch (cause) {
+      if (request !== latestImportRequest.current) return
+      setMessage('')
+      setError(cause instanceof Error ? cause.message : '备份检查失败。')
+    }
+  }
+
+  async function handleSafeRestore() {
+    const preview = backupPreview
+    if (!preview || restoreBusy || !canSafelyReplaceWithBackup(preview.comparison, preview.snapshot)) return
+    const confirmed = window.confirm(
+      '这不是合并操作，而是用备份整体替换本机数据。检查结果未发现本机独有记录或内容冲突。' +
+      '\\n\\n请确认已另外保存本机 JSON 备份，并且确实要恢复该文件。'
+    )
+    if (!confirmed) return
+
+    setRestoreBusy(true)
+    setError('')
+    try {
+      // The data layer rechecks safety within the same write transaction.
+      await restoreBackupIfCompatible(preview.snapshot)
+      ++latestImportRequest.current
+      setBackupPreview(null)
       await refresh()
-      setMessage('恢复完成。')
+      setMessage('安全恢复完成，请核对日期和记录数量。')
     } catch (cause) {
       setMessage('')
-      setError(cause instanceof Error ? cause.message : '恢复失败。')
+      setError(cause instanceof Error ? cause.message : '恢复失败；已停止写入。')
+      // Re-run the read-only comparison after a concurrent change.
+      try {
+        const current = await readAllData()
+        setBackupPreview({
+          ...preview,
+          comparison: compareBackupCollections(current, preview.snapshot)
+        })
+      } catch {
+        setBackupPreview(null)
+      }
+    } finally {
+      setRestoreBusy(false)
     }
   }
 
@@ -188,6 +231,15 @@ export function DataPage() {
       setError(cause instanceof Error ? cause.message : '设备数据删除失败。')
     }
   }
+
+  const previewRows = backupPreview ? [
+    { name: '每日记录', data: backupPreview.comparison.dailyRecords },
+    { name: '时期标记', data: backupPreview.comparison.periodLabels },
+    { name: '设备数据', data: backupPreview.comparison.deviceData }
+  ] : []
+  const previewSafeToReplace = backupPreview
+    ? canSafelyReplaceWithBackup(backupPreview.comparison, backupPreview.snapshot)
+    : false
 
   const recentDeviceData = [...deviceData]
     .sort((a, b) => b.recordDate.localeCompare(a.recordDate))
@@ -318,27 +370,97 @@ export function DataPage() {
             <div className="data-card">
               <h2>把数据完整带走</h2>
               <p>导出每日记录、时期标记和设备 / 自测数据。文件保存在你的设备上，不会上传。</p>
-              <button className="primary" onClick={handleExport}>导出 JSON 备份</button>
+              <button className="primary" onClick={() => void handleExport()}>导出 JSON 备份</button>
             </div>
           </section>
 
           <section className="data-section">
-            <div className="section-heading"><span>恢复</span><span>替换本机数据</span></div>
+            <div className="section-heading"><span>备份差异预览</span><span>本机检查 · 不上传</span></div>
             <div className="data-card">
-              <h2>从备份恢复</h2>
-              <p>先检查文件内容，再确认是否替换当前设备上的全部记录。</p>
-              <button className="quiet" onClick={() => inputRef.current?.click()}>选择 JSON 文件</button>
+              <h2>检查备份再决定是否恢复</h2>
+              <p>选择 JSON 文件后，只比对内容，不会直接覆盖本机记录。发现本机独有记录、内容冲突或重复日期时，恢复会被阻止。</p>
+              <button
+                className="quiet"
+                type="button"
+                disabled={restoreBusy}
+                onClick={() => inputRef.current?.click()}
+              >选择 JSON 文件并预览</button>
               <input
                 ref={inputRef}
                 type="file"
                 accept=".json,application/json"
+                aria-label="选择个人状态观察器 JSON 备份"
                 hidden
+                disabled={restoreBusy}
                 onChange={event => {
                   const file = event.target.files?.[0]
                   event.target.value = ''
-                  if (file) void handleRestore(file)
+                  if (file) void handlePreviewBackup(file)
                 }}
               />
+              {backupPreview && (
+                <div className="backup-compare" role="region" aria-label="备份差异预览">
+                  <h3>差异检查结果</h3>
+                  <p className="backup-filename">{backupPreview.filename}</p>
+                  <div className="backup-compare-header" aria-hidden="true">
+                    <span>数据类型</span><span>仅本机</span><span>仅备份</span><span>不同</span><span>相同</span>
+                  </div>
+                  {previewRows.map(row => (
+                    <div className="backup-compare-row" key={row.name}>
+                      <strong>{row.name}</strong>
+                      <span>{row.data.localOnly.length}</span>
+                      <span>{row.data.incomingOnly.length}</span>
+                      <span>{row.data.conflicts.length}</span>
+                      <span>{row.data.identical.length}</span>
+                    </div>
+                  ))}
+                  {getRestoreBlockReasons(backupPreview.comparison, backupPreview.snapshot).includes('duplicate-keys') && (
+                    <p className="backup-warning">检测到同一逻辑日期或标记 ID 重复，已禁止恢复。</p>
+                  )}
+                  {previewRows.some(row => row.data.localOnly.length || row.data.conflicts.length) && (
+                    <details className="backup-conflict-details">
+                      <summary>查看本机独有或冲突的记录</summary>
+                      {previewRows.map(row => {
+                        const keys = [
+                          ...row.data.localOnly.map(key => '本机独有：' + key),
+                          ...row.data.conflicts.map(key => '内容不同：' + key)
+                        ]
+                        return keys.length > 0 ? (
+                          <p key={row.name}>{row.name}：{keys.slice(0, 12).join('，')}{keys.length > 12 ? `（另有 ${keys.length - 12} 项）` : ''}</p>
+                        ) : null
+                      })}
+                    </details>
+                  )}
+                  {previewSafeToReplace ? (
+                    <p className="backup-advice">未发现会丢失的本机独有记录或内容冲突。仍建议先导出本机备份，然后明确确认恢复。</p>
+                  ) : (
+                    <p className="backup-warning">
+                      为保护当前设备的数据，暂不允许覆盖。请保留两端的 JSON 备份，等待安全合并功能。
+                      （{getRestoreBlockReasons(backupPreview.comparison, backupPreview.snapshot).map(reason => ({ 'local-only': '本机独有', conflicts: '内容冲突', 'duplicate-keys': '重复标识' })[reason]).join('、')}）
+                    </p>
+                  )}
+                  <div className="backup-compare-actions">
+                    {previewSafeToReplace && (
+                      <button
+                        className="primary"
+                        type="button"
+                        disabled={restoreBusy}
+                        onClick={() => void handleSafeRestore()}
+                      >{restoreBusy ? '检查与恢复中……' : '确认以备份替换本机数据'}</button>
+                    )}
+                    <button
+                      className="quiet"
+                      type="button"
+                      disabled={restoreBusy}
+                      onClick={() => {
+                        ++latestImportRequest.current
+                        setBackupPreview(null)
+                        setMessage('已关闭预览，本机数据未修改。')
+                      }}
+                    >关闭预览</button>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 

@@ -1,6 +1,8 @@
 // src/services/backup.ts
 import { db } from '../db/database'
 import type { AppBackup, DailyRecord, DeviceDailyData, PeriodLabel } from '../types'
+import { compareBackupCollections } from './backupComparison'
+import { canSafelyReplaceWithBackup } from './backupRestorePolicy'
 
 const BACKUP_FORMAT = 'personal-state-observer-backup' as const
 const CURRENT_SCHEMA_VERSION = '0.8'
@@ -136,5 +138,34 @@ export async function restoreBackup(snapshot: AppBackup): Promise<void> {
     if (deviceData.length) {
       await db.deviceDailyData.bulkPut(deviceData)
     }
+  })
+}
+
+
+/**
+ * Safe import path for the Data page. Re-check inside the write transaction,
+ * so edits from another tab cannot be silently lost between preview and restore.
+ * It intentionally does not resolve conflicts or merge independent records.
+ */
+export async function restoreBackupIfCompatible(snapshot: AppBackup): Promise<void> {
+  await db.transaction('rw', db.dailyRecords, db.periodLabels, db.deviceDailyData, async () => {
+    const [dailyRecords, periodLabels, deviceData] = await Promise.all([
+      db.dailyRecords.toArray(),
+      db.periodLabels.toArray(),
+      db.deviceDailyData.toArray()
+    ])
+    const comparison = compareBackupCollections(
+      { dailyRecords, periodLabels, deviceData }, snapshot
+    )
+    if (!canSafelyReplaceWithBackup(comparison, snapshot)) {
+      throw new Error('本机数据发生变化，或备份与本机存在冲突。已取消恢复，所有本机记录保持不变。')
+    }
+
+    await db.dailyRecords.clear()
+    await db.periodLabels.clear()
+    await db.deviceDailyData.clear()
+    if (snapshot.dailyRecords.length) await db.dailyRecords.bulkPut(snapshot.dailyRecords)
+    if (snapshot.periodLabels.length) await db.periodLabels.bulkPut(snapshot.periodLabels)
+    if (snapshot.deviceData?.length) await db.deviceDailyData.bulkPut(snapshot.deviceData)
   })
 }

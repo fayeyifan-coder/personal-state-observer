@@ -438,3 +438,24 @@ textarea{
   .entry-date-block{min-width:118px}
   .entry-metrics{gap:9px}
 }
+
+
+/* Read-only backup comparison; compact enough for phone screens. */
+.backup-compare{margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+.backup-compare h3{margin:0 0 5px;font-size:15px;font-weight:600}
+.data-card .backup-filename{margin:0 0 13px;font-size:12px;overflow-wrap:anywhere}
+.backup-compare-header,.backup-compare-row{display:grid;grid-template-columns:minmax(82px,1.7fr) repeat(4,minmax(38px,1fr));gap:4px;align-items:center;padding:9px 0;text-align:center}
+.backup-compare-header{color:var(--muted);font-size:10px;border-bottom:1px solid var(--line)}
+.backup-compare-row{font-size:12px;border-bottom:1px solid var(--line)}
+.backup-compare-row strong{font-size:12px;font-weight:500;text-align:left}
+.backup-compare-row span{font-variant-numeric:tabular-nums}
+.data-card .backup-advice,.data-card .backup-warning{margin:15px 0;font-size:12px;line-height:1.8}
+.data-card .backup-warning{color:#955348}
+.backup-conflict-details{padding:10px 0;border-bottom:1px solid var(--line);font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.backup-conflict-details summary{cursor:pointer;color:var(--ink)}
+.data-card .backup-conflict-details p{margin:10px 0 0}
+.backup-compare-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+.backup-compare-actions button{max-width:100%}
+@media(max-width:400px){
+  .backup-compare-header,.backup-compare-row{grid-template-columns:minmax(68px,1.6fr) repeat(4,minmax(32px,1fr));font-size:11px}
+}
