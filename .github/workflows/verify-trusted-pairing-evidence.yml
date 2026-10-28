@@ -45,3 +45,37 @@ jobs:
           test ! -e operator-encrypted-private.pem
           test ! -e operator-public.json
           test ! -e trusted-receipt-issuer.json
+
+  evidence-ephemeral-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sync_fixture_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d sync_fixture_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 8
+    env:
+      PGHOST: 127.0.0.1
+      PGDATABASE: sync_fixture_test
+      PGUSER: test_user
+      PGPASSWORD: test_password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Install ephemeral Postgres driver only
+        run: npm install --no-save --package-lock=false pg@8
+      - name: Confirm proven pending only and revoke receipt against real PostgreSQL
+        run: npx tsx tests/postgres-trusted-pairing-evidence.integration.ts
