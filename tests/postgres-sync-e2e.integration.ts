@@ -18,7 +18,7 @@ import {
   createPrivateChallengeHandler, createPrivateProjectAuthenticator,
   createDeviceProofMessage
 } from '../src/server/privateProjectDeviceAuth'
-import { createVerifiedPairingEvidenceIssuer } from '../src/server/verifiedPairingEvidenceIssuer'
+import { createPinnedVerifiedPairingEvidenceIssuer } from '../src/server/issuerKeyReadiness'
 import {
   createSignedOperatorPairingGate, operatorCommandBytes,
   type OperatorCommand
@@ -78,9 +78,13 @@ const snapshots = createPostgresSyncRepository(pool)
 const pairing = createPendingPairingWorkflow(context, {
   expectedSiteId: siteId, enabled: true, store: pairingStore
 })
-const issuer = createVerifiedPairingEvidenceIssuer(pool, {
-  enabled: true, siteId, signingKey: issuerKey.privateKey
-})
+// Only a synthetic CI fixture: this local pin is derived from the temporary
+// test key. Real hosting MUST establish its pin through another trusted channel.
+const issuer = await createPinnedVerifiedPairingEvidenceIssuer(pool, {
+  siteId, signingKey: issuerKey.privateKey,
+  publicKeyJwk: trust.publicJwk,
+  independentlyPinnedFingerprint: trust.fingerprint
+}, { enabled: true })
 const gate = createSignedOperatorPairingGate(pool, {
   enabled: true, expectedSiteId: siteId, operatorPublicKey
 })
