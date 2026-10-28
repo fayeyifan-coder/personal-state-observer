@@ -10,7 +10,7 @@ import type {
 // No Netlify package, credentials, I/O or database migration is executed here.
 type DatabaseRow = Record<string, unknown>
 export interface PostgresClient {
-  query(sql: string, values?: readonly unknown[]): Promise<{ rows: DatabaseRow[] }>
+  query(sql: string, values?: unknown[]): Promise<{ rows: DatabaseRow[] }>
   release(): void
 }
 export interface PostgresPool {
@@ -44,7 +44,9 @@ function canonical(value: unknown): string {
     const pairs = Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
     return '{' + pairs.map(([k, v]) => JSON.stringify(k) + ':' + canonical(v)).join(',') + '}'
   }
-  return JSON.stringify(value)
+  const encoded = JSON.stringify(value)
+  if (encoded === undefined) throw new Error('invalid-json-value')
+  return encoded
 }
 
 /**
