@@ -1,0 +1,41 @@
+name: Verify offline synthetic hosting cost and cloud rollback gates
+
+on:
+  push:
+    branches:
+      - test/synthetic-hosting-cost-recovery-gates-20261028
+  pull_request:
+    branches:
+      - test/issuer-key-readiness-no-deploy-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  no-network-hosting-preflight:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Conservative illustrative credit envelope and strict offline-only release gate
+        run: node --test tests/synthetic-hosting-gate.test.mjs
+      - name: Verify simulated encrypted cloud rollback never overwrites phone authority
+        run: npx tsx tests/synthetic-cloud-rollback-drill.test.ts
+      - name: Original pairing + encrypted backup regressions
+        run: |
+          npm run test:manual-pairing
+          npm run test:private-device-auth
+          npm run test:sync-protocol
+      - name: No accidental hosted functions, migrations or unsigned approval methods
+        run: node tools/sync-deployment-boundary-audit.mjs
+      - name: Production TS and bundle continue to build without deployment
+        run: npm run build
