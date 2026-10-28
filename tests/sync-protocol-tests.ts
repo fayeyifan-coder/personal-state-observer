@@ -81,7 +81,7 @@ assert.throws(
   () => parseSyncSnapshot({ ...second, parentSnapshotId: second.snapshotId }),
   /身份信息/
 )
-assert.throws(() => canPreparePublish('not-a-uuid', 'not-a-uuid'), /(?:)/)
+assert.equal(canPreparePublish('not-a-uuid', 'not-a-uuid'), false)
 // A bad password, a tampered parent, or an unknown history must not call restore.
 assert.equal(Object.hasOwn(await decryptAndVerifySyncSnapshot(first, phrase), 'syncLink'), false)
 console.log('[PASS] encrypted snapshot protocol: confidentiality, parent binding, replay/rollback preflight, invalid inputs')
