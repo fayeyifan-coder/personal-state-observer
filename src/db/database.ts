@@ -11,7 +11,9 @@ export class ObserverDB extends Dexie {
   deviceDailyData!: Table<DeviceDailyData, string>
 
   constructor() {
-    super('personal-state-observer')
+    super(import.meta.env?.VITE_ISOLATED_LAB === '1'
+      ? 'personal-state-observer-fixture-lab-v1'
+      : 'personal-state-observer')
 
     this.version(1).stores({
       dailyRecords: 'id, recordDate, recordingStatus, updatedAt',
