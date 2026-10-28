@@ -112,10 +112,26 @@ try {
     })
   }
   async function upload(data, opts) {
-    await page.locator('input[type=file]').setInputFiles({
-      name: 'synthetic-backup.json', mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(backup(data, opts)))
-    })
+    const json = JSON.stringify(backup(data, opts))
+    if (process.env.BROWSER_ENGINE === 'webkit' && await page.evaluate(() => !navigator.onLine)) {
+      // Playwright's virtual setInputFiles buffer can be unreadable in WebKit
+      // while its offline network emulator is active. Use a native in-page File
+      // so the offline test checks the application's real file handling.
+      await page.evaluate(content => {
+        const input = document.querySelector('input[type=file]')
+        const items = new DataTransfer()
+        items.items.add(new File([content], 'synthetic-backup.json', {
+          type: 'application/json'
+        }))
+        input.files = items.files
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      }, json)
+    } else {
+      await page.locator('input[type=file]').setInputFiles({
+        name: 'synthetic-backup.json', mimeType: 'application/json',
+        buffer: Buffer.from(json)
+      })
+    }
     try {
       await page.getByRole('region', { name: '备份差异预览' }).waitFor({ timeout: 8000 })
     } catch (cause) {
