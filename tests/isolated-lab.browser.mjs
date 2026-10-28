@@ -107,7 +107,23 @@ try {
     body: '<!DOCTYPE html><html></html>'
   }))
   await diagnostic.getByRole('button', { name: '检查 Netlify 登录（只读）' }).click()
-  await diagnostic.getByText(/只读诊断接口尚未部署/).waitFor()
+  await diagnostic.getByText(/返回了 HTML 网页/).waitFor()
+  await page.unroute(diagnosticRoute)
+  // The function itself returns a safe JSON 404 when strict site or URL
+  // verification rejects a request. Do not misreport that as undeployed.
+  await page.route(diagnosticRoute, route => route.fulfill({
+    status: 404, contentType: 'application/json',
+    body: '{"authenticated":false,"status":"unavailable"}'
+  }))
+  await diagnostic.getByRole('button', { name: '检查 Netlify 登录（只读）' }).click()
+  await diagnostic.getByText(/Function 已响应.*安全校验没有通过/).waitFor()
+  await page.unroute(diagnosticRoute)
+  await page.route(diagnosticRoute, route => route.fulfill({
+    status: 404, contentType: 'text/html',
+    body: '<!DOCTYPE html><html><body>Not Found</body></html>'
+  }))
+  await diagnostic.getByRole('button', { name: '检查 Netlify 登录（只读）' }).click()
+  await diagnostic.getByText(/未找到登录诊断 JSON 接口/).waitFor()
   await page.unroute(diagnosticRoute)
   assert.deepEqual(await readTestDB(), initial, 'diagnostic must not touch IndexedDB')
   assert.deepEqual(initial.map(x => x.recordDate), ['2026-10-26', '2026-10-27'])
