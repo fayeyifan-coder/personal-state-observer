@@ -6,6 +6,7 @@ import json
 import os
 import pty
 import select
+import subprocess
 import shutil
 import tempfile
 import time
@@ -13,15 +14,24 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 CLI = REPO / "tools" / "operator-offline.mjs"
+FIXTURE = REPO / "tests" / "pairing-evidence-fixture.mjs"
 SITE = "bb178423-5f8d-4b79-98b1-627179d25ea1"
 PASSWORD = "synthetic-only-password-34721!"
 with tempfile.TemporaryDirectory(prefix="pso-terminal-test-") as home:
     target = Path(home) / "one-time-fixture"
+    fixture_dir = Path(home) / "pso-operator-generated"
+    generated = subprocess.run(
+        ["node", str(FIXTURE), "--out", str(fixture_dir)],
+        capture_output=True, text=True, timeout=10
+    )
+    assert generated.returncode == 0, generated.stderr
+    labels = json.loads((fixture_dir / "fixture-labels.json").read_text("utf-8"))
     pid, fd = pty.fork()
     if pid == 0:
         os.execvp("node", [
             "node", str(CLI), "init",
-            "--dir", str(target), "--site-id", SITE
+            "--dir", str(target), "--site-id", SITE,
+            "--issuer", str(fixture_dir / "issuer.json")
         ])
     captured = bytearray()
 
@@ -40,6 +50,8 @@ with tempfile.TemporaryDirectory(prefix="pso-terminal-test-") as home:
         raise AssertionError("Missing terminal prompt: " + needle.decode("utf-8", "replace"))
 
     try:
+        until("请输入独立核对的服务器签发公钥完整64位指纹".encode())
+        os.write(fd, (labels["issuerFingerprint"] + "\r").encode("utf-8"))
         until("新密钥口令".encode())
         os.write(fd, (PASSWORD + "\r").encode("utf-8"))
         until("再次输入口令确认".encode())
@@ -62,22 +74,15 @@ with tempfile.TemporaryDirectory(prefix="pso-terminal-test-") as home:
         # A second PTY proves the complete manual sign ceremony accepts the
         # exact owner, full fingerprint and APPROVE, then hides the unlock
         # password. No trusted owner/real iPhone record is involved.
-        from uuid import uuid4
-        import subprocess
-        owner = str(uuid4())
-        fingerprint = "ab" * 32
-        request_path = Path(home) / "candidate.json"
+        owner = labels["ownerId"]
+        fingerprint = labels["fingerprint"]
+        receipt_path = fixture_dir / "receipt.json"
         signed_path = Path(home) / "signed-packet.json"
-        request_path.write_text(json.dumps({
-            "version": 1, "action": "approve-publisher",
-            "siteId": SITE, "ownerId": owner, "requestId": str(uuid4()),
-            "deviceId": str(uuid4()), "fingerprint": fingerprint
-        }), "utf-8")
         child, signfd = pty.fork()
         if child == 0:
             os.execvp("node", [
                 "node", str(CLI), "sign", "--dir", str(target),
-                "--request", str(request_path), "--out", str(signed_path)
+                "--receipt", str(receipt_path), "--out", str(signed_path)
             ])
         sign_output = bytearray()
 

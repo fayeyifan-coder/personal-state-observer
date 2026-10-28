@@ -2,6 +2,7 @@ import {
   createHash, createPrivateKey, createPublicKey,
   generateKeyPairSync, randomUUID, sign as nodeSign, verify as nodeVerify
 } from 'node:crypto'
+import { assertEvidenceIssuerTrust, verifySignedPairingEvidence, requestFromVerifiedEvidence } from './trusted-pairing-evidence.mjs'
 
 /**
  * Windows OFFLINE operator tool. Never imports browser/session code, never
@@ -11,6 +12,8 @@ import {
  */
 export const DOMAIN = 'personal-state-observer:operator-pairing-action:v1'
 export const MANIFEST_VERSION = 'pso-offline-operator-v1'
+export const PINNED_MANIFEST_VERSION = 'pso-offline-operator-v2'
+const PIN_DOMAIN = 'personal-state-observer:operator-evidence-trust-pin:v1'
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const OWNER = /^[A-Za-z0-9_-]{8,100}$/
 const FP = /^[0-9a-f]{64}$/
@@ -33,7 +36,7 @@ export function fingerprintForOperatorKey(jwk) {
   return createHash('sha256').update(JSON.stringify(canonicalPublicJwk(jwk))).digest('hex')
 }
 
-export function createOfflineOperatorKey(siteId,passphrase) {
+export function createOfflineOperatorKey(siteId,passphrase,trustedEvidenceIssuer=null) {
   if(!UUID.test(siteId)) throw Error('站点标识必须是完整 UUID')
   if(typeof passphrase!=='string' || [...passphrase].length<16 ||
     passphrase.length>1024) throw Error('审批密钥口令至少需要 16 个字符，且不能过长')
@@ -45,24 +48,59 @@ export function createOfflineOperatorKey(siteId,passphrase) {
     }
   })
   const jwk=canonicalPublicJwk(createPublicKey(publicKey).export({format:'jwk'}))
-  return {
-    encryptedPrivatePem:privateKey,
-    manifest:{
-      schema:MANIFEST_VERSION,siteId,
-      publicJwk:jwk,fingerprint:fingerprintForOperatorKey(jwk),
-      createdAt:new Date().toISOString()
-    }
+  const manifest={
+    schema:MANIFEST_VERSION,siteId,
+    publicJwk:jwk,fingerprint:fingerprintForOperatorKey(jwk),
+    createdAt:new Date().toISOString()
   }
+  if(trustedEvidenceIssuer!==null){
+    assertEvidenceIssuerTrust(trustedEvidenceIssuer)
+    if(trustedEvidenceIssuer.siteId!==siteId)
+      throw Error('证据签发站点与操作员密钥站点不同')
+    const signingKey=createPrivateKey({
+      key:privateKey,format:'pem',passphrase
+    })
+    const bound=pinBytes(siteId,trustedEvidenceIssuer.fingerprint)
+    const signature=nodeSign('sha256',bound,{
+      key:signingKey,dsaEncoding:'ieee-p1363'
+    })
+    manifest.schema=PINNED_MANIFEST_VERSION
+    manifest.receiptIssuer=trustedEvidenceIssuer
+    manifest.receiptIssuerBinding=signature.toString('base64url')
+  }
+  return { encryptedPrivatePem:privateKey,manifest }
 }
 
+function pinBytes(siteId,issuerFingerprint){
+  return Buffer.from([
+    PIN_DOMAIN,siteId,issuerFingerprint
+  ].join(String.fromCharCode(10)),'utf8')
+}
 export function assertOperatorManifest(manifest) {
-  if(!keysExactly(manifest,
-    ['schema','siteId','publicJwk','fingerprint','createdAt']) ||
-    manifest.schema!==MANIFEST_VERSION || !UUID.test(manifest.siteId) ||
-    !ISO.test(manifest.createdAt) ||
+  const pinned=manifest?.schema===PINNED_MANIFEST_VERSION
+  if(!keysExactly(manifest,pinned
+    ? ['schema','siteId','publicJwk','fingerprint','createdAt',
+       'receiptIssuer','receiptIssuerBinding']
+    : ['schema','siteId','publicJwk','fingerprint','createdAt']) ||
+    ![MANIFEST_VERSION,PINNED_MANIFEST_VERSION].includes(manifest.schema) ||
+    !UUID.test(manifest.siteId) || !ISO.test(manifest.createdAt) ||
     !FP.test(manifest.fingerprint) ||
     fingerprintForOperatorKey(manifest.publicJwk)!==manifest.fingerprint) {
     throw Error('本地操作员公钥清单格式或指纹错误')
+  }
+  if(pinned){
+    assertEvidenceIssuerTrust(manifest.receiptIssuer)
+    if(manifest.receiptIssuer.siteId!==manifest.siteId ||
+      !/^[A-Za-z0-9_-]{86}$/.test(manifest.receiptIssuerBinding))
+      throw Error('离线服务器证据公钥绑定无效')
+    const signer=createPublicKey({
+      key:canonicalPublicJwk(manifest.publicJwk),format:'jwk'
+    })
+    const valid=nodeVerify('sha256',pinBytes(
+      manifest.siteId,manifest.receiptIssuer.fingerprint
+    ),{key:signer,dsaEncoding:'ieee-p1363'},
+      Buffer.from(manifest.receiptIssuerBinding,'base64url'))
+    if(!valid)throw Error('证据签发公钥已被篡改或非此操作员密钥信任')
   }
   return manifest
 }
@@ -135,8 +173,26 @@ function unlock(encryptedPrivatePem,passphrase,manifest) {
   }
   return key
 }
-export function signOfflineOperatorCommand(command,encryptedPem,passphrase,manifest,now=Date.now()){
+export function signOfflineOperatorCommand(
+  command,encryptedPem,passphrase,manifest,now=Date.now(),verifiedReceipt=null
+){
   assertOperatorManifest(manifest)
+  if(manifest.schema===PINNED_MANIFEST_VERSION){
+    if(!verifiedReceipt ||
+      !verifySignedPairingEvidence(verifiedReceipt,manifest.receiptIssuer,now))
+      throw Error('缺少服务器签名且由操作员密钥固定信任的申请凭证')
+    const original=requestFromVerifiedEvidence(
+      verifiedReceipt,manifest.receiptIssuer,now
+    )
+    for(const field of ['action','siteId','ownerId','requestId','deviceId','fingerprint']){
+      if(command[field]!==original[field])
+        throw Error('待签指令与经验证的服务器候选内容不一致')
+    }
+  }else{
+    // Legacy manifests are only retained to keep old test fixtures readable.
+    // They are NOT allowed to generate new signed commands.
+    throw Error('旧版未绑定服务器证据公钥的操作员密钥不能签署指令')
+  }
   if(command.siteId!==manifest.siteId) throw Error('指令站点与审批密钥站点不一致')
   const bytes=operatorCommandBytes(command,now)
   const key=unlock(encryptedPem,passphrase,manifest)

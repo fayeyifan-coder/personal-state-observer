@@ -15,16 +15,17 @@ import {
   createProposedCommand, signOfflineOperatorCommand,
   verifyOfflineOperatorCommand
 } from './operator-offline-core.mjs'
+import { assertEvidenceIssuerTrust, requestFromVerifiedEvidence } from './trusted-pairing-evidence.mjs'
 
 const REPO=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..')
 const PRIVATE_NAME='operator-encrypted-private.pem'
 const PUBLIC_NAME='operator-public.json'
 const HELP=`离线操作员密钥工具（仅原型；无服务器审批功能）
-  node tools/operator-offline.mjs init --dir "仓库外全新目录" --site-id UUID
-  node tools/operator-offline.mjs sign --dir "已有密钥目录" --request "候选.json" --out "已签名.json"
+  node tools/operator-offline.mjs init --dir "仓库外全新目录" --site-id UUID --issuer "可信服务器公钥.json"
+  node tools/operator-offline.mjs sign --dir "已有密钥目录" --receipt "服务器签名证明.json" --out "已签名.json"
   node tools/operator-offline.mjs verify --dir "已有密钥目录" --signed "已签名.json"
 注意：口令只在本地交互输入，不接受命令行参数、环境变量或自动提交。
-候选文件应来自独立可信核对；签名只能生成离线凭证，不会连接服务器。
+首次建立操作员密钥前，必须通过独立渠道确认服务器签发公钥指纹；签名时只接受该公钥签发且尚未过期的凭证。
 `
 function fail(message){throw Error(message)}
 function optionMap(parts) {
@@ -33,7 +34,7 @@ function optionMap(parts) {
     const key=parts[i]
     if(!key?.startsWith('--')||i+1>=parts.length||
       parts[i+1].startsWith('--')||Object.hasOwn(args,key))fail('命令参数不正确；使用 --help 查看说明')
-    if(!['--dir','--site-id','--request','--out','--signed'].includes(key))
+    if(!['--dir','--site-id','--issuer','--receipt','--out','--signed'].includes(key))
       fail('不接受这个参数，包括命令行口令：'+key)
     args[key]=parts[i+1]
   }
@@ -132,13 +133,20 @@ async function main() {
   }
   const args=optionMap(tail)
   if(action==='init'){
-    requireOptions(args,['--dir','--site-id'])
+    requireOptions(args,['--dir','--site-id','--issuer'])
     const dir=notInsideGit(args['--dir'])
     if(fs.existsSync(dir))fail('目录已存在；绝不覆盖已有密钥或在旧文件夹内创建')
+    const trust=assertEvidenceIssuerTrust(readJson(notInsideGit(args['--issuer'])))
+    if(trust.siteId!==args['--site-id'])fail('证据签发站点与操作员目标站点不一致')
+    stdout.write('请从独立可信渠道（不是此 JSON 自己）核对服务器证据签发公钥指纹：\n')
+    stdout.write(trust.fingerprint+'\n')
+    const entered=(await promptText('请输入独立核对的服务器签发公钥完整64位指纹：')).trim()
+    if(entered!==trust.fingerprint)
+      fail('服务器公钥不被独立确认，拒绝建立审批私钥')
     const pass1=await promptSecret('新密钥口令（至少16字符，输入不会显示）：')
     const pass2=await promptSecret('再次输入口令确认：')
     if(pass1!==pass2)fail('两次口令不一致，未生成密钥')
-    const {encryptedPrivatePem,manifest}=createOfflineOperatorKey(args['--site-id'],pass1)
+    const {encryptedPrivatePem,manifest}=createOfflineOperatorKey(args['--site-id'],pass1,trust)
     fs.mkdirSync(dir,{mode:0o700})
     try {
       fs.writeFileSync(path.join(dir,PRIVATE_NAME),encryptedPrivatePem,{
@@ -157,9 +165,11 @@ async function main() {
     return
   }
   if(action==='sign'){
-    requireOptions(args,['--dir','--request','--out'])
+    requireOptions(args,['--dir','--receipt','--out'])
     const {manifest,encryptedPem}=loadDir(args['--dir'])
-    const request=readJson(notInsideGit(args['--request']))
+    if(!manifest.receiptIssuer)fail('操作员密钥未绑定可信服务器签发公钥，不能进行审批')
+    const receipt=readJson(notInsideGit(args['--receipt']))
+    const request=requestFromVerifiedEvidence(receipt,manifest.receiptIssuer)
     const target=notInsideGit(args['--out'])
     if(fs.existsSync(target))fail('目标文件已存在，绝不覆盖已有签名')
     if(!fs.existsSync(path.dirname(target)))fail('签名输出文件夹不存在')
@@ -179,7 +189,7 @@ async function main() {
     show(command)
     const passphrase=await promptSecret('审批私钥口令（本机解锁，不显示）：')
     // Sign exactly the same previewed command, not a fresh unseen nonce.
-    const signed=signOfflineOperatorCommand(command,encryptedPem,passphrase,manifest)
+    const signed=signOfflineOperatorCommand(command,encryptedPem,passphrase,manifest,Date.now(),receipt)
     fs.writeFileSync(target,JSON.stringify(signed,null,2)+'\n',{
       flag:'wx',mode:0o600
     })
