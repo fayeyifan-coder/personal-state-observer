@@ -51,7 +51,7 @@ jobs:
           npm run test:sync-protocol
           npm run test:sync-service
           npm run test:private-device-auth
-      - name: Manual pairing: verify P256 ownership before human approval
+      - name: Verify P256 ownership before human approval
         run: npm run test:manual-pairing
       - name: TypeScript and production build
         run: npm run build
