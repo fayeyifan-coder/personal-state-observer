@@ -157,7 +157,7 @@ export async function restoreBackupIfCompatible(snapshot: AppBackup): Promise<vo
     const comparison = compareBackupCollections(
       { dailyRecords, periodLabels, deviceData }, snapshot
     )
-    if (!canSafelyReplaceWithBackup(comparison)) {
+    if (!canSafelyReplaceWithBackup(comparison, snapshot)) {
       throw new Error('本机数据发生变化，或备份与本机存在冲突。已取消恢复，所有本机记录保持不变。')
     }
 
