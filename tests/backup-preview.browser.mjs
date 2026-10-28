@@ -130,6 +130,23 @@ try {
   await page.getByText('安全恢复完成，请核对日期和记录数量。').waitFor()
   assert.equal((await readLocal()).length, 1, 'confirmed safe restore persists the incoming record')
 
+  // Explicitly cancelling the browser confirmation cannot write anything.
+  await setLocal(collection())
+  await upload(collection([day('2026-10-27')]))
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('button', { name: '确认以备份替换本机数据' }).click()
+  assert.equal((await readLocal()).length, 0, 'cancelled confirmation must not restore')
+
+  // Malformed JSON should report an error without deleting local data.
+  await setLocal(collection([day('2026-10-26', 1)]))
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'invalid.json', mimeType: 'application/json',
+    buffer: Buffer.from('not-a-backup-file')
+  })
+  await page.locator('.inline-error').waitFor()
+  assert.equal(await page.getByRole('region', { name: '备份差异预览' }).count(), 0)
+  assert.equal((await readLocal())[0].recordDate, '2026-10-26')
+
   // A locally unique day can never be silently deleted.
   await setLocal(collection([day('2026-10-27')]))
   await upload(collection([day('2026-10-28')]))
@@ -195,7 +212,7 @@ try {
   }
 
   // Never send synthetic personal data to remote host in these tests.
-  console.log('[PASS] Chromium browser: preview, restoration, conflict blocks, offline, stale preview, narrow layout')
+  console.log('[PASS] Chromium browser: preview, restore, cancel, malformed JSON, conflicts, offline, stale preview, narrow layout')
   await context.close()
 } finally {
   if (browser) await browser.close()
