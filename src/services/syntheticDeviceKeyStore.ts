@@ -221,3 +221,58 @@ export async function discardUnpairedLocalTestPhoneKey(): Promise<void> {
     db.close()
   }
 }
+
+/**
+ * Return only a synthetic PUBLIC key plus its existing device ID.
+ * This never enrolls anything remotely and never returns a private CryptoKey.
+ */
+export async function readLocalTestPairingPublicKey(): Promise<{
+  deviceId: string
+  publicJwk: JsonWebKey
+}> {
+  assertSyntheticLab()
+  const db = await openKeyStore()
+  try {
+    const record = await readStoredKey(db)
+    if (!record) throw Error('请先在本机生成测试密钥。')
+    validKey(record)
+    return { deviceId: record.deviceId, publicJwk: { ...record.publicJwk } }
+  } finally { db.close() }
+}
+
+/**
+ * Sign only a domain-separated, server-shaped pending-pairing challenge.
+ * The caller cannot ask this method to sign arbitrary bytes or a snapshot.
+ */
+export async function signLocalTestPairingChallenge(args: {
+  siteId: string
+  ownerId: string
+  requestId: string
+  nonce: string
+  deviceId: string
+  fingerprint: string
+  expiresAt: string
+}): Promise<Uint8Array<ArrayBuffer>> {
+  assertSyntheticLab()
+  const db = await openKeyStore()
+  try {
+    const record = await readStoredKey(db)
+    if (!record) throw Error('请先在本机生成测试密钥。')
+    validKey(record)
+    if (record.deviceId !== args.deviceId) throw Error('申请中的设备与本机密钥不一致。')
+    if (!Number.isFinite(Date.parse(args.expiresAt)) ||
+      Date.parse(args.expiresAt) <= Date.now() ||
+      Date.parse(args.expiresAt) - Date.now() > 300_000) {
+      throw Error('模拟挑战已过期或有效期异常，请重新发起演练。')
+    }
+    const { fingerprintForPairingJwk, pairingProofBytes } =
+      await import('./syntheticPairingContract')
+    if (await fingerprintForPairingJwk(record.publicJwk) !== args.fingerprint) {
+      throw Error('申请公钥指纹与本机密钥不一致。')
+    }
+    const message = pairingProofBytes(args)
+    return new Uint8Array(await crypto.subtle.sign(
+      { name: 'ECDSA', hash: 'SHA-256' }, record.privateKey, message
+    ))
+  } finally { db.close() }
+}
