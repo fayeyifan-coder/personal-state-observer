@@ -5,6 +5,10 @@ import { createPendingPairingWorkflow, pairingProofMessage } from '../src/server
 import { createPostgresManualPairingStore } from '../src/server/postgresManualPairingStore'
 import { createVerifiedPairingEvidenceIssuer } from '../src/server/verifiedPairingEvidenceIssuer'
 import {
+  createSignedOperatorPairingGate, operatorCommandBytes,
+  type OperatorCommand
+} from '../src/server/signedOperatorPairingGate'
+import {
   makeEvidenceIssuerTrust, verifySignedPairingEvidence,
   requestFromVerifiedEvidence
 } from '../tools/trusted-pairing-evidence.mjs'
@@ -21,7 +25,6 @@ const pool=new pg.Pool({
 })
 const siteId='fa442ee9-e077-412c-b9ad-f8a95dbc7e2f'
 const ownerId='18d97d1e-4b4f-4d4e-9dbd-d48ecc48be83'
-const subject='netlify:'+siteId+':'+ownerId
 const context={site:{id:siteId},
   user:{id:ownerId,expiresAt:new Date(Date.now()+300_000)}}
 const store=createPostgresManualPairingStore(pool)
@@ -41,12 +44,34 @@ const phone=await crypto.subtle.generateKey({
 },false,['sign','verify'])
 const phoneJwk=await crypto.subtle.exportKey('jwk',phone.publicKey)
 const deviceId=crypto.randomUUID()
+const operatorKeys=await crypto.subtle.generateKey({
+  name:'ECDSA',namedCurve:'P-256'
+},false,['sign','verify'])
+const operatorPublicKey=await crypto.subtle.exportKey('jwk',operatorKeys.publicKey)
+const gate=createSignedOperatorPairingGate(pool,{
+  enabled:true,expectedSiteId:siteId,operatorPublicKey
+})
+async function applySignedEvidence(
+  receipt: NonNullable<Awaited<ReturnType<typeof issuer.issue>>>
+) {
+  const trusted=requestFromVerifiedEvidence(receipt,trust)
+  const command:OperatorCommand={
+    ...trusted,nonce:crypto.randomUUID(),
+    issuedAt:new Date().toISOString(),
+    expiresAt:new Date(Date.now()+90_000).toISOString()
+  }
+  const signature=Buffer.from(await crypto.subtle.sign({
+    name:'ECDSA',hash:'SHA-256'
+  },operatorKeys.privateKey,operatorCommandBytes(command))).toString('base64url')
+  return gate.apply(command,signature)
+}
 
 try {
   for(const filename of [
     '20261028151000_sync_schema.sql',
     '20261028163500_device_proof_schema.sql',
-    '20261028191000_pending_pairing.sql'
+    '20261028191000_pending_pairing.sql',
+    '20261028203000_operator_signed_actions.sql'
   ]){
     await pool.query(readFileSync('docs/sql-drafts/'+filename,'utf8'))
   }
@@ -81,16 +106,15 @@ try {
     'different Netlify account cannot receive this pending proof')
   assert.equal(await issuer.issue(context,'approve-publisher',crypto.randomUUID()),null)
 
-  assert.equal(await store.approveByOperator(subject,pending!.requestId,
-    pending!.fingerprint),'approved',
-    'only local fixture operator grants synthetic publisher for revocation test')
+  assert.equal(await applySignedEvidence(receipt!),'approved',
+    'trusted receipt plus a distinct operator signature required for approval')
   assert.equal(await issuer.issue(context,'approve-publisher',pending!.requestId),null,
     'approved pending request must not be reissued as pending')
   const revoke=await issuer.issue(context,'revoke-publisher',deviceId)
   assert.ok(revoke)
   assert.equal(revoke!.evidence.deviceId,deviceId)
   assert.equal(verifySignedPairingEvidence(revoke,trust),true)
-  assert.equal(await store.revokeByOperator(subject,deviceId),true)
+  assert.equal(await applySignedEvidence(revoke!),'revoked')
   assert.equal(await issuer.issue(context,'revoke-publisher',deviceId),null,
     'revoked publisher must not receive new signed revoke receipt')
   console.log('[PASS] ephemeral PG: only proven pending and live registered phone yield pinned signed evidence')

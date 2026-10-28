@@ -99,8 +99,12 @@ try {
   const phone = await makePair(), phoneId = crypto.randomUUID()
   const request = await pendingWorkflow.request(phoneId, phone.jwk)
   assert.ok(request)
-  assert.equal(await store.approveByOperator(subject, request!.requestId, request!.fingerprint),
-    'not-proven', 'pending alone never authorizes')
+  const unprovedCommand = command({
+    requestId: request!.requestId, deviceId: phoneId,
+    fingerprint: request!.fingerprint
+  })
+  assert.equal(await gate.apply(unprovedCommand, await sign(unprovedCommand)),
+    'not-eligible', 'pending alone never authorizes even with a signed approval')
   assert.equal(await prove(request!, phoneId, phone.key.privateKey), true)
   assert.equal(await deviceProof.getRegisteredPublisher(subject, phoneId), null,
     'proof alone cannot grant publishing')
@@ -140,7 +144,8 @@ try {
   assert.equal((await deviceProof.getRegisteredPublisher(subject, phoneId))?.revoked, false)
   assert.equal(await gate.apply(approved, validSignature), 'replayed')
   const actionsAfterApproval = await pool.query(
-    'SELECT count(*)::int AS n FROM sync_operator_actions WHERE subject=$1',
+    "SELECT count(*)::int AS n FROM sync_operator_actions " +
+    "WHERE subject=$1 AND result='approved'",
     [subject]
   )
   assert.equal(actionsAfterApproval.rows[0].n, 1)

@@ -20,8 +20,8 @@ for (const path of files) {
   }
   if (!/^src\/.*\.[cm]?[jt]sx?$/.test(path)) continue
   const source = readFileSync(path, 'utf8')
-  if (/\.\s*(approveByOperator|revokeByOperator)\s*\(/.test(source)) {
-    leaks.push('legacy unsigned approval/revoke call reachable from src: ' + path)
+  if (/\b(?:approveByOperator|revokeByOperator)\b/.test(source)) {
+    leaks.push('legacy unsigned approval/revoke symbol is forbidden in src: ' + path)
   }
   if (!path.startsWith('src/server/') &&
       /\b(?:from|import)\s*(?:\(\s*)?['"][^'"]*(?:\/server\/|^server\/)/.test(source)) {
