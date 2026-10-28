@@ -142,7 +142,22 @@ export function parseWorkspaceSnapshot(value: unknown): WorkspaceSnapshotV1 {
     !Number.isFinite(Date.parse(input.generatedAt))) {
     throw Error('unsupported-workspace-snapshot')
   }
+  const topKeys = Object.keys(input)
+  if (topKeys.length !== 6 ||
+    topKeys.some(key => ![
+      'format', 'schemaVersion', 'sourceApp', 'generatedAt',
+      'sourceVersion', 'data'
+    ].includes(key))) {
+    throw Error('unexpected-workspace-fields')
+  }
   const data = input.data
+  if (data && (Object.keys(data).length !== 5 ||
+    Object.keys(data).some(key => ![
+      'interval', 'metrics', 'totalRecordDays',
+      'observedDaysByMetric', 'days'
+    ].includes(key)))) {
+    throw Error('unexpected-workspace-data-fields')
+  }
   if (!data || !Array.isArray(data.metrics) || !Array.isArray(data.days) ||
     !data.interval || typeof data.interval.from !== 'string' ||
     typeof data.interval.through !== 'string' ||
