@@ -40,6 +40,24 @@ function displayNumber(value: number | null, suffix = '') {
   return value == null ? '—' : `${value}${suffix}`
 }
 
+/** Safari/WebKit may reject File.text() for an offline-selected local file. */
+async function readSelectedBackupFile(file: File): Promise<string> {
+  try {
+    return await file.text()
+  } catch {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') resolve(reader.result)
+        else reject(new Error('无法读取这个本地备份文件。'))
+      }
+      reader.onerror = () => reject(new Error('本地备份读取失败，请检查文件是否可用。'))
+      reader.onabort = () => reject(new Error('本地备份读取已取消。'))
+      reader.readAsText(file, 'utf-8')
+    })
+  }
+}
+
 export function DataPage() {
   const [records, setRecords] = useState<DailyRecord[]>([])
   const [labels, setLabels] = useState<PeriodLabel[]>([])
@@ -145,7 +163,7 @@ export function DataPage() {
       if (file.size > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
         throw new Error('备份文件过大，已停止读取。')
       }
-      const parsed: unknown = JSON.parse(await file.text())
+      const parsed: unknown = JSON.parse(await readSelectedBackupFile(file))
       if (request !== latestImportRequest.current) return
       if (isEncryptedBackup(parsed)) {
         setEncryptedPending({ filename: file.name, envelope: parsed })
