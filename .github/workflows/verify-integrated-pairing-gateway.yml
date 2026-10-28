@@ -50,5 +50,9 @@ jobs:
           npm run test:private-device-auth
           npm run test:manual-pairing
           npm run test:sync-service
+      - name: Block direct bypass of signed operator approval in HTTP routes
+        run: |
+          node --test tests/pairing-route-audit.test.mjs
+          node tools/audit-pairing-routes.mjs
       - name: Build unchanged normal web app
         run: npm run build
