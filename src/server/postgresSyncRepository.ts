@@ -103,107 +103,13 @@ export function createPostgresSyncRepository(pool: PostgresPool): SyncRepository
       }
       const client = await pool.connect()
       try {
-        // One extra row gives the service a truthful hasMore flag.
-        // Bind all identity/cursor/limit values. No dynamic user SQL.
+        // Retrieve one extra row to prove whether another page exists.
+        // Subject, cursor, and limit are bound parameters, never interpolated.
         const sql = 'SELECT snapshot_id, parent_snapshot_id, revision ' +
           'FROM sync_snapshots WHERE subject = $1 ' +
           (cursor === undefined ? '' : 'AND revision < $2 ') +
-          'ORDER BY revision DESC LIMIT 
-
-    async commitSnapshot(input): Promise<SyncCommit> {
-      requireSubject(input.subject)
-      const snapshot = parseSyncSnapshot(input.snapshot)
-      if (snapshot.parentSnapshotId !== input.expectedHead) {
-        throw new Error('parent-mismatch')
-      }
-      const client = await pool.connect()
-      let started = false
-      try {
-        await client.query('BEGIN')
-        started = true
-        // Seed the subject's CAS mutex. PK prevents duplicate mutex rows
-        // on first concurrent upload. This is NOT a device authorization.
-        await client.query(
-          'INSERT INTO sync_heads (subject, snapshot_id, revision) ' +
-          'VALUES ($1, NULL, 0) ON CONFLICT (subject) DO NOTHING',
-          [input.subject]
-        )
-        const locked = await client.query(
-          'SELECT snapshot_id, revision FROM sync_heads ' +
-          'WHERE subject = $1 FOR UPDATE', [input.subject]
-        )
-        const head = readHead(locked.rows[0])
-        if (!locked.rows.length) throw new Error('missing-head-lock')
-
-        // FOR SHARE holds the publisher registration against concurrent
-        // revocation until this transaction completes.
-        const approved = await client.query(
-          'SELECT 1 FROM sync_publisher_devices ' +
-          'WHERE subject = $1 AND device_id = $2 AND revoked_at IS NULL FOR SHARE',
-          [input.subject, input.verifiedDeviceId]
-        )
-        if (approved.rows.length !== 1) {
-          await client.query('ROLLBACK')
-          started = false
-          return { status: 'forbidden' }
-        }
-
-        const found = await client.query(
-          'SELECT envelope FROM sync_snapshots ' +
-          'WHERE subject = $1 AND snapshot_id = $2',
-          [input.subject, snapshot.snapshotId]
-        )
-        if (found.rows.length) {
-          const old = parseSyncSnapshot(found.rows[0].envelope)
-          if (old.parentSnapshotId === input.expectedHead &&
-            canonical(old) === canonical(snapshot)) {
-            await client.query('COMMIT')
-            started = false
-            return { status: 'already-committed', head }
-          }
-          await client.query('ROLLBACK')
-          started = false
-          return { status: 'stale', head }
-        }
-        if (head.snapshotId !== input.expectedHead) {
-          await client.query('ROLLBACK')
-          started = false
-          return { status: 'stale', head }
-        }
-        const nextRevision = head.revision + 1
-        if (!Number.isSafeInteger(nextRevision)) throw new Error('revision-overflow')
-
-        // The encrypted envelope must be the only persisted observation
-        // content. No passphrase, record dates, or answers are indexed.
-        await client.query(
-          'INSERT INTO sync_snapshots ' +
-          '(subject, snapshot_id, parent_snapshot_id, revision, envelope) ' +
-          'VALUES ($1, $2, $3, $4, $5::jsonb)',
-          [input.subject, snapshot.snapshotId, snapshot.parentSnapshotId,
-            nextRevision, JSON.stringify(snapshot)]
-        )
-        await client.query(
-          'UPDATE sync_heads SET snapshot_id = $2, revision = $3 WHERE subject = $1',
-          [input.subject, snapshot.snapshotId, nextRevision]
-        )
-        await client.query('COMMIT')
-        started = false
-        return {
-          status: 'committed',
-          head: { snapshotId: snapshot.snapshotId, revision: nextRevision }
-        }
-      } catch (error) {
-        if (started) {
-          try { await client.query('ROLLBACK') } catch { /* original error wins */ }
-        }
-        throw error
-      } finally {
-        client.release()
-      }
-    }
-  }
-}
- + (cursor === undefined ? 2 : 3)
+          'ORDER BY revision DESC LIMIT ' +
+          (cursor === undefined ? '$2' : '$3')
         const values = cursor === undefined
           ? [subject, limit] : [subject, cursor, limit]
         const { rows } = await client.query(sql, values)
