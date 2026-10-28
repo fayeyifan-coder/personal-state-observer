@@ -10,3 +10,8 @@ Thumbs.db
 coverage/
 .headless-backup-*/
 *.tsbuildinfo
+# Never commit local operator signing material or signed owner commands
+.operator-keys/
+operator-encrypted-private.pem
+operator-public.json
+operator-signed-command*.json
