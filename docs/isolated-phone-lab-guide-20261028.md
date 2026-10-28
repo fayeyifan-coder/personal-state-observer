@@ -14,13 +14,21 @@
 - 同一分支若构建为正常应用，则拒绝测试标记的备份（避免误把虚构数据作为真实观察）。**正式线上 main 尚不包含该功能，不能将测试备份拿到旧版正式站点试导入。**
 - “生成两天虚构记录”仅修改**测试站独立数据库**，绝不清理正式网站的任何存储。请勿输入真实记录，更不要用正式备份操作测试站。
 
-## 独立域名部署建议：Vercel
+## 独立域名部署：Netlify（取代 Vercel）
 
-此分支已经带 `vercel.json`，指定 `npm run build:testlab`、`dist` 输出、`noindex`。可创建一个**只用于测试的独立 Vercel 项目**，关联 `fayeyifan-coder/personal-state-observer`，并将项目的 Production Branch 指向 `test/isolated-phone-lab-20261028`。在 Vercel 项目 Settings > Security > Deployment Protection 中启用 **Vercel Authentication / All Deployments**，使测试环境需要授权账户访问。部署后必须先核查页面出现“独立测试站 · 仅限虚构数据”，并检查其 origin 不属于 `fayeyifan-coder.github.io`，才能打开手机验收。
+本分支已将 `vercel.json` 删除并改为 `netlify.toml`。构建命令固定为 `npm run build:testlab`，输出目录为 `dist`，Node 版本为 22。Netlify 提供独立 HTTPS 的 `*.netlify.app` 地址，与正式站点的 `fayeyifan-coder.github.io` 完全不同 origin。项目也设置了 `noindex,nofollow,noarchive`，但**禁止搜索引擎收录不等于身份验证**。
 
-**这一过程需要用户主动连接/授权 Vercel 账号和项目；仓库当前只有准备好的分支和配置，没有授权也就没有可用的测试网址。** 不要声称已经部署，不要猜测 `*.vercel.app` 地址。
+### 通过 Netlify GitHub 集成创建专用项目
 
-如果使用 Cloudflare Pages，也必须单独新建测试项目，确认使用 `npm run build:testlab`、输出目录 `dist`，并将 Production Branch 设为测试分支。默认预览站点可能公开，务必在验证前开启访问控制。不要把测试站部署到现有 GitHub Pages 地址的任何子路径。
+1. 打开 https://app.netlify.com/start ，登录自己的 Netlify 账号，选择 **Import an existing project / GitHub**，仅授权访问 `fayeyifan-coder/personal-state-observer`。
+2. 为验收建立新的、独立的 Netlify 项目；**必须将部署分支设为 `test/isolated-phone-lab-20261028`**，不要选 `main`。不要将已有正式网站的托管配置迁移进来。
+3. 核对仓库根目录的 `netlify.toml`：Build command=`npm run build:testlab`，Publish directory=`dist`。如果网页配置与仓库冲突，以本测试构建为准；不得回退到普通 `npm run build`。
+4. 访问保护：在 Netlify 的 **Project configuration > General > Visitor access > Project visibility** 中选择 **Private** 并覆盖 Production and previews。Free / Personal 方案的 Private 项目仅 Owner 可以访问；不需要购买 Pro 方案才能设置 Private。若界面无该配置，不应在未经确认时把测试站设为公开。
+5. 初次部署后必须先确认是独立 HTTPS origin、出现“**独立测试站 · 仅限虚构数据**”横幅、点击“生成两天虚构记录”有效，才把真实手机带入测试。任何页面出现正式个人历史记录都代表隔离失败，应立刻停止。
+
+**平台限制与授权：** 当前 GitHub 仓库仅有部署配置，本对话没有已连接的 Netlify 托管账户权限，因此尚无站点部署、域名或可分享的真实 URL。Netlify `netlify.app` 在中国大陆各子域名的可访问性不稳定，必须用用户的手机和所在网络实际打开验证；打不开就继续更换供应商，不能据此改变数据隔离规则。
+
+**不要**将测试站放在 `https://fayeyifan-coder.github.io` 的任何子路径下。正式 `main` 和历史手机记录必须保持不变。
 
 ## 真机验收（仅虚构数据）
 
