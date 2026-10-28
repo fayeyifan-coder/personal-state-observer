@@ -1,0 +1,44 @@
+name: Verify external issuer key continuity before any hosted enablement
+
+on:
+  push:
+    branches:
+      - test/issuer-key-readiness-no-deploy-20261028
+  pull_request:
+    branches:
+      - fix/mandatory-signed-pairing-gate-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  offline-issuer-readiness:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify old and substituted signing key refusals and independent pin
+        run: npx tsx tests/issuer-key-readiness.test.ts
+      - name: Refuse accidental deployed functions or migrations
+        run: node tools/sync-deployment-boundary-audit.mjs
+      - name: Recheck existing pairing and device proof
+        run: |
+          npm run test:manual-pairing
+          npm run test:private-device-auth
+      - name: Check production TypeScript and bundle, no deploy
+        run: npm run build
+      - name: Verify no real keys packaged
+        shell: bash
+        run: |
+          test ! -e operator-encrypted-private.pem
+          test ! -e operator-public.json
+          test ! -e trusted-receipt-issuer.json
