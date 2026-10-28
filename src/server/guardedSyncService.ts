@@ -140,7 +140,7 @@ export function createGuardedSyncHandler(dependencies: SyncServiceDependencies) 
 
     const url = new URL(request.url)
     const pathname = url.pathname
-    const snapshotMatch = /^\/api\/sync\/snapshots\/([0-9a-f-]+)$/i.exec(pathname)
+    const snapshotMatch = /^\/api\/sync\/snapshots\/([^/]+)$/.exec(pathname)
     const isHead = pathname === '/api/sync/head'
     const isHistory = pathname === '/api/sync/history'
     const isPublish = pathname === '/api/sync/snapshots' && request.method === 'POST'
