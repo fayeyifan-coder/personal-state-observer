@@ -65,8 +65,32 @@ try {
   } catch {
     throw Error('WebKit verify failed: ' + (await status(after)) + ' JS: ' + errors.join('; ').slice(0, 400))
   }
+  // Exercise the EXACT offline pairing proof with the persisted key.
+  let outbound = 0
+  page.on('request', request => {
+    if (request.method() !== 'GET' ||
+        request.url().includes('/api/') ||
+        request.url().includes('/.netlify/functions/')) outbound++
+  })
+  const rehearsing = page.getByRole('region', { name: '本地配对演练' })
+  await rehearsing.getByRole('button', { name: '生成本地模拟配对申请' }).click()
+  await rehearsing.getByText(/模拟申请已生成/).waitFor({ timeout: 12000 })
+  const fingerprint = await rehearsing.locator(
+    '[data-testid="synthetic-pairing-candidate"] code'
+  ).innerText()
+  assert.match(fingerprint, /^[a-f0-9]{64}$/)
+  await rehearsing.getByRole('button', {
+    name: '使用原密钥证明持有（不联网）'
+  }).click()
+  await rehearsing.getByText(/本机持有证明通过。但没有服务器申请/).waitFor({
+    timeout: 23000
+  })
+  assert.equal(outbound, 0, 'WebKit pairing rehearsal must never send a network request')
+  await page.reload()
+  await rehearsing.getByText(/尚未生成模拟申请/).waitFor()
+  await after.getByText(/已找到此前生成的本机测试密钥/).waitFor()
   await context.close()
-  console.log('[PASS] synthetic WebKit: persisted non-extractable key survives reload and signs locally')
+  console.log('[PASS] synthetic WebKit: saved CryptoKey persists, proves pending pairing format offline and never uploads')
 } finally {
   if (browser) await browser.close()
   vite.kill('SIGTERM')
