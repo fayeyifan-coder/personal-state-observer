@@ -50,6 +50,14 @@ function notInsideGit(input){
   if(!path.isAbsolute(input))fail('必须使用绝对路径')
   let ancestor=resolved
   while(true){
+    // Reject symlinks and Windows junctions along the whole path. Without
+    // this, a directory outside Git could point into Git through a link.
+    try {
+      if(fs.lstatSync(ancestor).isSymbolicLink())
+        fail('安全路径不能通过符号链接或目录联接点')
+    } catch(error) {
+      if(error?.code!=='ENOENT')throw error
+    }
     if(fs.existsSync(path.join(ancestor,'.git'))) {
       fail('拒绝在 Git 工作树内存储操作员密钥或签名文件')
     }
