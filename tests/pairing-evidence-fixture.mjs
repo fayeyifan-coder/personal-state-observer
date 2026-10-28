@@ -1,4 +1,4 @@
-import { generateKeyPairSync, createHash, randomUUID, sign as nodeSign, createPublicKey } from 'node:crypto'
+import { generateKeyPairSync, createHash, randomUUID, sign as nodeSign } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { makeEvidenceIssuerTrust,evidenceBytes,verifySignedPairingEvidence } from '../tools/trusted-pairing-evidence.mjs'
@@ -6,7 +6,7 @@ import { makeEvidenceIssuerTrust,evidenceBytes,verifySignedPairingEvidence } fro
 export function createSyntheticSignedEvidence(overrides={}) {
   const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'})
   const siteId='bb178423-5f8d-4b79-98b1-627179d25ea1'
-  const trust=makeEvidenceIssuerTrust(siteId,createPublicKey(publicKey).export({format:'jwk'}))
+  const trust=makeEvidenceIssuerTrust(siteId,publicKey.export({format:'jwk'}))
   const now=Date.now()
   const evidence={
     version:1,action:'approve-publisher',siteId,
