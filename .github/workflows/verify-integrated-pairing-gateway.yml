@@ -1,0 +1,58 @@
+name: Verify integrated server-only pairing gateway with disposable PostgreSQL
+
+on:
+  push:
+    branches:
+      - feat/integrated-pairing-service-no-deploy-20261028
+  pull_request:
+    branches:
+      - feat/offline-issuer-rotation-audit-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-pairing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sync_fixture_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d sync_fixture_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 8
+    env:
+      PGHOST: 127.0.0.1
+      PGDATABASE: sync_fixture_test
+      PGUSER: test_user
+      PGPASSWORD: test_password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Install ephemeral PostgreSQL driver
+        run: npm install --no-save --package-lock=false pg@8
+      - name: Integrated isolated gateway and synthetic pairing/revocation
+        run: npx tsx tests/postgres-integrated-pairing-gateway.integration.ts
+      - name: Preexisting proof and server signature tests
+        run: |
+          npm run test:private-device-auth
+          npm run test:manual-pairing
+          npm run test:sync-service
+      - name: Block direct bypass of signed operator approval in HTTP routes
+        run: |
+          node --test tests/pairing-route-audit.test.mjs
+          node tools/audit-pairing-routes.mjs
+      - name: Build unchanged normal web app
+        run: npm run build
