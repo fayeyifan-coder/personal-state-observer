@@ -1,0 +1,41 @@
+name: Verify synthetic-only local device key experiment
+
+on:
+  push:
+    branches:
+      - feat/testlab-local-device-key-20261028
+  pull_request:
+    branches:
+      - test/isolated-phone-lab-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  local-key-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Existing backup, encryption and diagnostic contracts
+        run: |
+          npm run test:logic
+          npm run test:analysis
+          npm run test:backup-comparison
+          npm run test:backup-restore-policy
+          npm run test:encrypted-backup
+          npm run test:lab-login-diagnostic
+      - name: Compile normal production site without deploying
+        run: npm run build
+      - name: Compile synthetic test site without deploying
+        run: npm run build:testlab
+      - name: Install Playwright for synthetic-only Chromium run
+        run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Test nonextractable key, persistence and nonmutating isolation
+        run: node tests/isolated-lab.browser.mjs
