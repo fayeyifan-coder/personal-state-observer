@@ -1,0 +1,57 @@
+name: Verify independent operator signature for pairing and revocation
+
+on:
+  push:
+    branches:
+      - feat/operator-signed-pairing-gate-20261028
+  pull_request:
+    branches:
+      - feat/manual-pairing-approval-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  operator-gate-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sync_fixture_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d sync_fixture_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 8
+    env:
+      PGHOST: 127.0.0.1
+      PGDATABASE: sync_fixture_test
+      PGUSER: test_user
+      PGPASSWORD: test_password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Existing offline safety and permission tests
+        run: |
+          npm run test:backup-comparison
+          npm run test:backup-restore-policy
+          npm run test:encrypted-backup
+          npm run test:sync-service
+          npm run test:private-device-auth
+          npm run test:manual-pairing
+      - name: Build normal production bundle without deploying
+        run: npm run build
+      - name: Install local fixture PG client
+        run: npm install --no-save --package-lock=false pg@8
+      - name: Exercise signed operator gate and revocation in disposable Postgres
+        run: npx tsx tests/postgres-operator-signed-gate.integration.ts
