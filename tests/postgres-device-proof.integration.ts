@@ -19,9 +19,16 @@ const other = 'netlify:synthetic-site:other-owner'
 const phoneId = '394f4c9e-cd1a-4240-a959-3f54e53a832d'
 const otherPhone = '9fd5c9db-ccba-4a4b-b4dd-2cba532abafb'
 try {
-  await pool.query(readFileSync(
-    'docs/sql-drafts/20261028151000_sync_schema.sql', 'utf8'
-  ))
+  // This suite runs after the snapshot transaction suite in the SAME
+  // disposable CI database. Initialize base schema only if absent.
+  const { rows: schemaRows } = await pool.query(
+    "SELECT to_regclass('public.sync_heads') AS table_name"
+  )
+  if (!schemaRows[0].table_name) {
+    await pool.query(readFileSync(
+      'docs/sql-drafts/20261028151000_sync_schema.sql', 'utf8'
+    ))
+  }
   await pool.query(readFileSync(
     'docs/sql-drafts/20261028163500_device_proof_schema.sql', 'utf8'
   ))
