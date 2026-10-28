@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { createSyntheticSignedEvidence } from './pairing-evidence-fixture.mjs'
+import { requestFromVerifiedEvidence, verifySignedPairingEvidence } from '../tools/trusted-pairing-evidence.mjs'
 import { createPublicKey, webcrypto, randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,19 +19,16 @@ import { verifyOperatorCommand, operatorCommandBytes as serverCommandBytes }
 const siteId='bb178423-5f8d-4b79-98b1-627179d25ea1'
 const ownerId='37abfc4a-0e1f-4f95-9d0e-bd0e53cacdac'
 const password='local synthetic only 4567!'
-const { encryptedPrivatePem, manifest }=createOfflineOperatorKey(siteId,password)
-const candidate={
-  version:1,action:'approve-publisher',siteId,ownerId,
-  requestId:randomUUID(),deviceId:randomUUID(),
-  fingerprint:'ab'.repeat(32)
-}
+const {trust,receipt}=createSyntheticSignedEvidence({ownerId})
+const { encryptedPrivatePem, manifest }=createOfflineOperatorKey(siteId,password,trust)
+const candidate=requestFromVerifiedEvidence(receipt,trust)
 const confirmation={
   ownerId,fingerprint:candidate.fingerprint,action:candidate.action
 }
 const now=Date.now()
 const proposal=createProposedCommand(candidate,manifest,confirmation,now)
 const signed=signOfflineOperatorCommand(
-  proposal,encryptedPrivatePem,password,manifest,now)
+  proposal,encryptedPrivatePem,password,manifest,now,receipt)
 const verifyConfig={
   operatorPublicKey:manifest.publicJwk,expectedSiteId:siteId,enabled:true,
   now:()=>now
@@ -80,10 +79,10 @@ test('candidate requires out-of-band typed owner, exact full fingerprint and act
 
 test('wrong operator key, wrong passphrase and tampering fail closed',async()=>{
   assert.throws(()=>signOfflineOperatorCommand(
-    proposal,encryptedPrivatePem,'wrong passphrase',manifest,now))
-  const unrelated=createOfflineOperatorKey(siteId,password)
+    proposal,encryptedPrivatePem,'wrong passphrase',manifest,now,receipt))
+  const unrelated=createOfflineOperatorKey(siteId,password,trust)
   assert.throws(()=>signOfflineOperatorCommand(
-    proposal,unrelated.encryptedPrivatePem,password,manifest,now),/不对应/)
+    proposal,unrelated.encryptedPrivatePem,password,manifest,now,receipt),/不对应/)
   for(const item of [
     {...proposal,action:'revoke-publisher'},
     {...proposal,ownerId:randomUUID()},
@@ -111,11 +110,40 @@ test('revoke uses distinct signed action and cannot be changed into approve',asy
   const command=createProposedCommand(rev,manifest,{
     ownerId,fingerprint:rev.fingerprint,action:rev.action
   },now)
-  const packet=signOfflineOperatorCommand(command,encryptedPrivatePem,password,manifest,now)
+  const revokeFixture=createSyntheticSignedEvidence({action:'revoke-publisher',ownerId,deviceId:rev.deviceId,requestId:rev.requestId,fingerprint:rev.fingerprint})
+  const revokeKey=createOfflineOperatorKey(siteId,password,revokeFixture.trust)
+  const revokeManifest=revokeKey.manifest
+  const packet=signOfflineOperatorCommand(command,revokeKey.encryptedPrivatePem,password,revokeManifest,now,revokeFixture.receipt)
   assert.equal(await verifyOperatorCommand(command,packet.signature,verifyConfig),true)
   assert.equal(verifyOfflineOperatorCommand({...packet,command:{
     ...command,action:'approve-publisher'
-  }},manifest,now),false)
+  }},revokeManifest,now),false)
+})
+
+
+test('server evidence must be signed, current and pinned to operator key',()=>{
+  assert.equal(verifySignedPairingEvidence(receipt,trust,now),true)
+  const changed={...receipt,evidence:{...receipt.evidence,fingerprint:'ff'.repeat(32)}}
+  assert.equal(verifySignedPairingEvidence(changed,trust,now),false)
+  assert.throws(()=>signOfflineOperatorCommand(
+    proposal,encryptedPrivatePem,password,manifest,now,changed
+  ),/服务器签名/)
+  assert.throws(()=>signOfflineOperatorCommand(
+    proposal,encryptedPrivatePem,password,manifest,now,null
+  ),/服务器签名/)
+  const fake=createSyntheticSignedEvidence({
+    ...receipt.evidence,action:'approve-publisher'
+  })
+  assert.equal(verifySignedPairingEvidence(fake.receipt,trust,now),false,
+    'replacement issuer key cannot forge trusted server evidence')
+  const swapped={...manifest,receiptIssuer:fake.trust}
+  assert.throws(()=>createProposedCommand(candidate,swapped,confirmation,now),
+    /公钥已被篡改|绑定/)
+  const swappedFingerprint={...manifest,receiptIssuerBinding:'A'.repeat(86)}
+  assert.throws(()=>createProposedCommand(candidate,swappedFingerprint,confirmation,now))
+  const legacy=createOfflineOperatorKey(siteId,password)
+  assert.throws(()=>signOfflineOperatorCommand(proposal,
+    legacy.encryptedPrivatePem,password,legacy.manifest,now,receipt),/旧版/)
 })
 
 test('CLI refuses non-interactive key creation and accepts no password flags',()=>{
@@ -123,13 +151,14 @@ test('CLI refuses non-interactive key creation and accepts no password flags',()
   try {
     const cli=resolve('tools/operator-offline.mjs')
     const out=join(fixture,'brand-new-key')
+    writeFileSync(join(fixture,'trusted.json'),JSON.stringify(trust))
     const refuse=spawnSync(process.execPath,
-      [cli,'init','--dir',out,'--site-id',siteId],
+      [cli,'init','--dir',out,'--site-id',siteId,'--issuer',join(fixture,'trusted.json')],
       {encoding:'utf8',input:''})
     assert.notEqual(refuse.status,0)
     assert.equal(existsSync(out),false)
     const secret=spawnSync(process.execPath,
-      [cli,'init','--dir',out,'--site-id',siteId,'--passphrase','leaked'],
+      [cli,'init','--dir',out,'--site-id',siteId,'--issuer',join(fixture,'trusted.json'),'--passphrase','leaked'],
       {encoding:'utf8'})
     assert.notEqual(secret.status,0)
     assert.equal(existsSync(out),false)
