@@ -125,6 +125,25 @@ try {
   )
   await deviceAfterReload.getByRole('button', { name: '验证本机签名（不联网）' }).click()
   await deviceAfterReload.getByText(/本机签名验证通过/).waitFor()
+  // Simulate the native Safari crypto promise never settling. The UI must
+  // visibly acknowledge the click and identify the blocked stage instead
+  // of looking inert. We reload to cancel the synthetic stuck operation.
+  const injected = await page.evaluate(() => {
+    try {
+      Object.defineProperty(crypto.subtle, 'sign', {
+        configurable: true, value: () => new Promise(() => {})
+      })
+      return true
+    } catch { return false }
+  })
+  assert.equal(injected, true, 'browser must permit synthetic stuck-sign probe')
+  await deviceAfterReload.getByRole('button', { name: '验证本机签名（不联网）' }).click()
+  await deviceAfterReload.getByText(/本机验证进行中：使用私钥签名/).waitFor()
+  await deviceAfterReload.getByRole('button', { name: '正在本机验证……' }).waitFor()
+  await page.reload()
+  await deviceAfterReload.getByText(/已找到此前生成的本机测试密钥/).waitFor()
+  await deviceAfterReload.getByRole('button', { name: '验证本机签名（不联网）' }).click()
+  await deviceAfterReload.getByText(/本机签名验证通过/).waitFor()
   assert.equal(keyNetworkRequests, 0, 'local key tests never transmit data')
   page.off('request', trackKeys)
   assert.deepEqual(await readTestDB(), initial, 'key operations do not mutate observations')
