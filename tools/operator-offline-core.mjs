@@ -74,7 +74,7 @@ export function createOfflineOperatorKey(siteId,passphrase,trustedEvidenceIssuer
 function pinBytes(siteId,issuerFingerprint){
   return Buffer.from([
     PIN_DOMAIN,siteId,issuerFingerprint
-  ].join('\\n'),'utf8')
+  ].join(String.fromCharCode(10)),'utf8')
 }
 export function assertOperatorManifest(manifest) {
   const pinned=manifest?.schema===PINNED_MANIFEST_VERSION
