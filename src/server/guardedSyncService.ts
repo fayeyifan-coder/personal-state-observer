@@ -3,6 +3,9 @@ import {
   parseSyncSnapshot,
   type SyncSnapshotV1
 } from '../services/syncEnvelope'
+import {
+  MAX_SYNC_HTTP_BODY_BYTES, serializedSyncJsonBytes
+} from '../services/syncTransportLimits'
 
 /**
  * Only an authenticated SERVER adapter may construct this value.
@@ -58,7 +61,8 @@ export type SyncServiceDependencies = {
   enabled: boolean
 }
 
-export const MAX_SYNC_REQUEST_BYTES = 35 * 1024 * 1024 + 4096
+export const MAX_SYNC_REQUEST_BYTES = MAX_SYNC_HTTP_BODY_BYTES
+export const MAX_SYNC_RESPONSE_BYTES = MAX_SYNC_HTTP_BODY_BYTES
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, {
@@ -153,6 +157,15 @@ export function createGuardedSyncHandler(dependencies: SyncServiceDependencies) 
        url.origin !== dependencies.allowedOrigin)) {
       return fail(403, 'origin-not-allowed')
     }
+    // Reject a declared oversize body BEFORE invoking the phone signature
+    // authenticator and consuming a one-use publish challenge.
+    if (isPublish) {
+      const length = request.headers.get('content-length')
+      if (length !== null && (!/^\d+$/.test(length) ||
+        Number(length) > MAX_SYNC_REQUEST_BYTES)) {
+        return fail(413, 'request-too-large')
+      }
+    }
     let session: VerifiedSyncSession | null
     try {
       session = await dependencies.authenticate(request)
@@ -174,7 +187,13 @@ export function createGuardedSyncHandler(dependencies: SyncServiceDependencies) 
         const id = snapshotMatch![1]
         if (!isUuid(id)) return fail(400, 'invalid-snapshot-id')
         const snapshot = await dependencies.repository.readSnapshot(session.subject, id)
-        return snapshot ? json(snapshot) : fail(404, 'snapshot-not-found')
+        if (!snapshot) return fail(404, 'snapshot-not-found')
+        // A legacy row may be larger than the host's 6 MB response limit.
+        // Fail cleanly instead of emitting a truncated or rejected response.
+        if (serializedSyncJsonBytes(snapshot) > MAX_SYNC_RESPONSE_BYTES) {
+          return fail(503, 'snapshot-exceeds-host-limit')
+        }
+        return json(snapshot)
       }
       if (isPublish) {
         if (session.permission !== 'publish' || !session.deviceId) {
