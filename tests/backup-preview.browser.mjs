@@ -6,7 +6,8 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { chromium } from 'playwright'
+import { chromium, webkit } from 'playwright'
+const browserEngine = process.env.BROWSER_ENGINE === 'webkit' ? webkit : chromium
 
 const host = 'http://127.0.0.1:4173'
 const url = host + '/personal-state-observer/#/data'
@@ -58,7 +59,7 @@ const backup = (data, { withoutDeviceData = false } = {}) => {
 let browser
 try {
   await waitForPreview()
-  browser = await chromium.launch({ headless: true })
+  browser = await browserEngine.launch({ headless: true })
   const context = await browser.newContext({ viewport: { width: 375, height: 812 }, acceptDownloads: true })
   const page = await context.newPage()
   await page.goto(url)
@@ -260,7 +261,7 @@ try {
   }
 
   // Never send synthetic personal data to remote host in these tests.
-  console.log('[PASS] Chromium browser: preview, guarded restore, encrypted roundtrip, wrong password, tampering, cancellation, offline, narrow layout')
+  console.log('[PASS] ' + (process.env.BROWSER_ENGINE === 'webkit' ? 'WebKit' : 'Chromium') + ': preview, guarded restore, encrypted roundtrip, wrong password, tampering, cancellation, offline, narrow layout')
   await context.close()
 } finally {
   if (browser) await browser.close()
