@@ -15,7 +15,7 @@ export function LabLoginDiagnostic() {
     if (check === 'checking') return
     setCheck('checking')
     try {
-      const response = await fetch('/api/lab-login-status', {
+      const response = await fetch('/.netlify/functions/lab-login-status', {
         method: 'GET',
         cache: 'no-store',
         credentials: 'same-origin',
