@@ -10,7 +10,7 @@ import { chromium } from 'playwright'
 const url = 'http://127.0.0.1:4174/'
 const vite = spawn(process.execPath, [
   'node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1',
-  '--port', '4174', '--strictPort'
+  '--port', '4174', '--strictPort', '--mode', 'testlab'
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
 let logs = ''
 vite.stdout.on('data', chunk => { logs += chunk.toString() })
@@ -37,7 +37,15 @@ try {
   })
   const page = await context.newPage()
   await page.goto(url)
-  await page.getByRole('region', { name: '独立测试站点' }).waitFor()
+  try {
+    await page.getByRole('region', { name: '独立测试站点' }).waitFor({ timeout: 10000 })
+  } catch (cause) {
+    throw new Error('Preview did not render isolated lab: ' + JSON.stringify({
+      url: page.url(),
+      body: (await page.locator('body').innerText().catch(() => ''))?.slice(0, 600),
+      server: logs.slice(-800)
+    }), { cause })
+  }
   await page.getByText('独立测试站 · 仅限虚构数据').waitFor()
   await page.getByRole('button', { name: '生成两天虚构记录' }).click()
   await page.getByText('已在隔离测试数据库中写入两天虚构记录。').waitFor()
