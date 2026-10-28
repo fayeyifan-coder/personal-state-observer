@@ -33,3 +33,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Test isolated site and fixture protections
         run: node tests/isolated-lab.browser.mjs
+      - name: Install WebKit for minimal offline File API diagnosis
+        run: npx playwright install --with-deps webkit
+      - name: Probe WebKit in-memory File APIs independently of the app
+        run: node tests/webkit-offline-file.probe.mjs
