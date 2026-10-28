@@ -6,7 +6,7 @@ import { createDailyRecord } from '../app/createDailyRecord'
 import { getDay, saveDay } from '../db/records'
 import {
   getField,
-  getFirstQuestion,
+  getResumeQuestionId,
   getVisibleQuestions,
   getNextQuestion,
   getPreviousQuestion,
@@ -149,7 +149,7 @@ export function RecordPage() {
         setEditing(route.editing || (status !== 'recorded' && status !== 'opted_out'))
 
         const last = phaseLastQuestionId(nextRecord, route.phase)
-        setQuestionId(last ?? getFirstQuestion(nextRecord.answers, route.phase)?.id ?? null)
+        setQuestionId(getResumeQuestionId(nextRecord.answers, last, route.phase))
         setLoading(false)
       })
       .catch(() => {
@@ -265,7 +265,7 @@ export function RecordPage() {
             {completed || optedOut ? (
               <button className="primary" onClick={() => {
                 setEditing(true)
-                setQuestionId(phaseLastQuestionId(record, route.phase) ?? getFirstQuestion(record.answers, route.phase)?.id ?? null)
+                setQuestionId(getResumeQuestionId(record.answers, phaseLastQuestionId(record, route.phase), route.phase))
               }}>{optedOut ? `改为记录${route.phase === 'morning' ? '早晨状态' : '今晚总结'}` : '修改这次记录'}</button>
             ) : null}
             <a className="quiet link-button" href={`#/record?date=${route.recordDate}&phase=${otherPhase}`}>记录{otherPhase === 'morning' ? '早晨' : '晚上'}</a>
