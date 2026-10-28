@@ -69,6 +69,71 @@ try {
     })
   }
   const initial = await readTestDB()
+  // Keys reside in their OWN IndexedDB, not the observation database.
+  // This must remain local-only: generating/verifying never sends HTTP POST.
+  const devicePanel = page.getByRole('region', { name: '设备密钥本机测试' })
+  await devicePanel.waitFor()
+  await devicePanel.getByText(/此浏览器尚未生成测试设备密钥/).waitFor()
+  let keyNetworkRequests = 0
+  const trackKeys = request => {
+    if (request.method() !== 'GET' || request.url().includes('/api/') ||
+        request.url().includes('/.netlify/functions/')) keyNetworkRequests++
+  }
+  page.on('request', trackKeys)
+  await devicePanel.getByRole('button', { name: '生成此浏览器测试密钥' }).click()
+  await devicePanel.getByText(/已保存不可导出的本地私钥/).waitFor()
+  const originalIdentity = await devicePanel.locator('[data-testid="fixture-key-identity"]').innerText()
+  assert.match(originalIdentity, /服务器尚未配对/)
+  const keyStored = await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('personal-state-observer-synthetic-device-key-v1')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const record = await new Promise((resolve, reject) => {
+      const tx = db.transaction('keys', 'readonly')
+      const request = tx.objectStore('keys').get('local-signing-key')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    db.close()
+    let exported = false
+    try {
+      await crypto.subtle.exportKey('jwk', record.privateKey)
+      exported = true
+    } catch { /* expected: browser refuses export */ }
+    return {
+      algorithm: record.privateKey.algorithm.name,
+      extractable: record.privateKey.extractable,
+      exported,
+      privateKeyIsCryptoKey: record.privateKey instanceof CryptoKey,
+      publicKeyHasNoD: !Object.hasOwn(record.publicJwk, 'd')
+    }
+  })
+  assert.deepEqual(keyStored, {
+    algorithm: 'ECDSA', extractable: false, exported: false,
+    privateKeyIsCryptoKey: true, publicKeyHasNoD: true
+  })
+  await devicePanel.getByRole('button', { name: '验证本机签名（不联网）' }).click()
+  await devicePanel.getByText(/本机签名验证通过/).waitFor()
+  await page.reload()
+  const deviceAfterReload = page.getByRole('region', { name: '设备密钥本机测试' })
+  await deviceAfterReload.getByText(/已找到此前生成的本机测试密钥/).waitFor()
+  assert.equal(
+    await deviceAfterReload.locator('[data-testid="fixture-key-identity"]').innerText(),
+    originalIdentity.replace('本机签名已验证', '已保存，等待签名校验')
+  )
+  await deviceAfterReload.getByRole('button', { name: '验证本机签名（不联网）' }).click()
+  await deviceAfterReload.getByText(/本机签名验证通过/).waitFor()
+  assert.equal(keyNetworkRequests, 0, 'local key tests never transmit data')
+  page.off('request', trackKeys)
+  assert.deepEqual(await readTestDB(), initial, 'key operations do not mutate observations')
+  // Deleting an unpaired fixture key always requires a browser confirmation.
+  page.once('dialog', dialog => dialog.accept())
+  await deviceAfterReload.getByRole('button', { name: '清除未配对测试密钥' }).click()
+  await deviceAfterReload.getByText(/仅清除了当前浏览器的未配对测试密钥/).waitFor()
+  assert.equal(await deviceAfterReload.locator('[data-testid="fixture-key-identity"]').count(), 0)
+  assert.deepEqual(await readTestDB(), initial, 'key deletion leaves observations alone')
   // Diagnostic is entirely opt-in; it must never trigger on initial render
   // and must never alter the local fixture database.
   const diagnostic = page.getByRole('region', { name: '只读登录诊断' })
