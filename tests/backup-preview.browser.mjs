@@ -5,7 +5,9 @@
  */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { chromium } from 'playwright'
+import { readFile } from 'node:fs/promises'
+import { chromium, webkit } from 'playwright'
+const browserEngine = process.env.BROWSER_ENGINE === 'webkit' ? webkit : chromium
 
 const host = 'http://127.0.0.1:4173'
 const url = host + '/personal-state-observer/#/data'
@@ -57,7 +59,7 @@ const backup = (data, { withoutDeviceData = false } = {}) => {
 let browser
 try {
   await waitForPreview()
-  browser = await chromium.launch({ headless: true })
+  browser = await browserEngine.launch({ headless: true })
   const context = await browser.newContext({ viewport: { width: 375, height: 812 }, acceptDownloads: true })
   const page = await context.newPage()
   await page.goto(url)
@@ -110,11 +112,41 @@ try {
     })
   }
   async function upload(data, opts) {
-    await page.locator('input[type=file]').setInputFiles({
-      name: 'synthetic-backup.json', mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(backup(data, opts)))
-    })
-    await page.getByRole('region', { name: '备份差异预览' }).waitFor()
+    const json = JSON.stringify(backup(data, opts))
+    if (process.env.BROWSER_ENGINE === 'webkit' && await page.evaluate(() => !navigator.onLine)) {
+      // Playwright's virtual setInputFiles buffer can be unreadable in WebKit
+      // while its offline network emulator is active. Use a native in-page File
+      // so the offline test checks the application's real file handling.
+      await page.evaluate(content => {
+        const input = document.querySelector('input[type=file]')
+        const items = new DataTransfer()
+        items.items.add(new File([content], 'synthetic-backup.json', {
+          type: 'application/json'
+        }))
+        input.files = items.files
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      }, json)
+    } else {
+      await page.locator('input[type=file]').setInputFiles({
+        name: 'synthetic-backup.json', mimeType: 'application/json',
+        buffer: Buffer.from(json)
+      })
+    }
+    try {
+      await page.getByRole('region', { name: '备份差异预览' }).waitFor({ timeout: 8000 })
+    } catch (cause) {
+      const state = await page.evaluate(() => ({
+        location: location.href,
+        online: navigator.onLine,
+        messages: [...document.querySelectorAll('.inline-message,.inline-error')]
+          .map(element => element.textContent),
+        hasInput: !!document.querySelector('input[type=file]'),
+        visibleRegions: [...document.querySelectorAll('[role=region]')]
+          .map(element => element.getAttribute('aria-label'))
+      }))
+      throw new Error('Backup preview did not appear; isolated test UI state: ' +
+        JSON.stringify(state), { cause })
+    }
   }
   async function denied() {
     assert.equal(await page.getByRole('button', { name: '确认以备份替换本机数据' }).count(), 0)
@@ -204,6 +236,53 @@ try {
   await page.getByText(/本机数据发生变化，或备份与本机存在冲突/).waitFor()
   assert.deepEqual((await readLocal()).map(x => x.recordDate), ['2026-10-28'])
 
+  // Browser encryption: export ciphertext, never upload, decrypt only for comparison.
+  const encryptedPassword = 'very-long-unique-passphrase-for-tests-2026'
+  await setLocal(collection([day('2026-10-27', 4)]))
+  await page.getByPlaceholder('使用较长且唯一的密码短语').fill(encryptedPassword)
+  await page.getByPlaceholder('再次输入密码以确认').fill(encryptedPassword)
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '下载加密 JSON 备份' }).click()
+  ])
+  assert.match(download.suggestedFilename(), /^personal-state-observer-encrypted-.*\.json$/)
+  const encryptedFile = await readFile(await download.path())
+  const envelope = JSON.parse(encryptedFile.toString('utf8'))
+  assert.equal(envelope.format, 'personal-state-observer-encrypted-backup')
+  assert.equal(encryptedFile.toString().includes('"mood"'), false, 'ciphertext hides field names')
+  assert.equal(encryptedFile.toString().includes(encryptedPassword), false, 'ciphertext hides password')
+  await setLocal(collection())
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'encrypted.json', mimeType: 'application/json', buffer: encryptedFile
+  })
+  await page.getByRole('button', { name: '解密并预览差异' }).waitFor()
+  assert.equal((await readLocal()).length, 0, 'encrypted selection does not restore')
+  await page.getByText('备份密码（仅在本机使用）').locator('..').locator('input').fill('wrong-pass')
+  await page.getByRole('button', { name: '解密并预览差异' }).click()
+  await page.getByText(/密码不正确，或加密备份已经损坏/).waitFor()
+  assert.equal((await readLocal()).length, 0)
+  await page.getByText('备份密码（仅在本机使用）').locator('..').locator('input').fill(encryptedPassword)
+  await page.getByRole('button', { name: '解密并预览差异' }).click()
+  await page.getByRole('region', { name: '备份差异预览' }).waitFor()
+  assert.equal((await readLocal()).length, 0, 'successful decryption only previews')
+  await page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('button', { name: '确认以备份替换本机数据' }).click()
+  await page.getByText('安全恢复完成，请核对日期和记录数量。').waitFor()
+  assert.equal((await readLocal())[0].answers.mood, 4, 'encrypted roundtrip restores on explicit confirmation')
+
+  // Tampered ciphertext must fail before reaching the preview.
+  await setLocal(collection())
+  const corrupt = { ...envelope, ciphertext: 'AAAA' + envelope.ciphertext.slice(4) }
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'corrupt.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(corrupt))
+  })
+  await page.getByText('备份密码（仅在本机使用）').locator('..').locator('input').fill(encryptedPassword)
+  await page.getByRole('button', { name: '解密并预览差异' }).click()
+  await page.getByText(/密码不正确，或加密备份已经损坏/).waitFor()
+  assert.equal(await page.getByRole('region', { name: '备份差异预览' }).count(), 0)
+  assert.equal((await readLocal()).length, 0)
+
   // Responsive UI: no horizontal overflow at common narrow viewports.
   for (const width of [320, 375, 390]) {
     await page.setViewportSize({ width, height: 760 })
@@ -212,7 +291,7 @@ try {
   }
 
   // Never send synthetic personal data to remote host in these tests.
-  console.log('[PASS] Chromium browser: preview, restore, cancel, malformed JSON, conflicts, offline, stale preview, narrow layout')
+  console.log('[PASS] ' + (process.env.BROWSER_ENGINE === 'webkit' ? 'WebKit' : 'Chromium') + ': preview, guarded restore, encrypted roundtrip, wrong password, tampering, cancellation, offline, narrow layout')
   await context.close()
 } finally {
   if (browser) await browser.close()
