@@ -473,3 +473,18 @@ textarea{
 .data-form input:focus-visible,.backup-password-label input:focus-visible{
   outline:2px solid var(--olive);outline-offset:2px;
 }
+
+/* Standalone synthetic-only validation site. No production origin shares this UI. */
+.isolated-lab-notice{
+  position:relative;z-index:11;max-width:760px;margin:0 auto;
+  padding:18px 20px;background:#f6f2df;border:2px solid #a58c43;
+  border-radius:0 0 15px 15px;color:#463c28
+}
+.isolated-lab-notice strong{display:block;font-size:16px;line-height:1.5}
+.isolated-lab-notice p{font-size:13px;line-height:1.7;margin:6px 0 10px}
+.isolated-lab-actions{display:flex;flex-wrap:wrap;gap:8px}
+.isolated-lab-actions button{
+  background:#fffdf5;border:1px solid #b5a477;border-radius:10px;
+  min-height:44px;padding:8px 12px;color:inherit;cursor:pointer;font-size:13px
+}
+.isolated-lab-actions button:focus-visible{outline:2px solid var(--olive);outline-offset:3px}
