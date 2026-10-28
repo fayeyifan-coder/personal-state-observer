@@ -87,14 +87,32 @@ export function createPostgresSyncRepository(pool: PostgresPool): SyncRepository
       }
     },
 
-    async readHistory(subject: string) {
+    async readHistory(subject: string, options?: {
+      beforeRevision?: number
+      limit?: number
+    }) {
       requireSubject(subject)
+      const limit = options?.limit ?? 100
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 101) {
+        throw Error('invalid-history-limit')
+      }
+      const cursor = options?.beforeRevision
+      if (cursor !== undefined &&
+        (!Number.isSafeInteger(cursor) || cursor <= 0)) {
+        throw Error('invalid-history-cursor')
+      }
       const client = await pool.connect()
       try {
-        const { rows } = await client.query(
-          'SELECT snapshot_id, parent_snapshot_id, revision FROM sync_snapshots ' +
-          'WHERE subject = $1 ORDER BY revision DESC LIMIT 100', [subject]
-        )
+        // Retrieve one extra row to prove whether another page exists.
+        // Subject, cursor, and limit are bound parameters, never interpolated.
+        const sql = 'SELECT snapshot_id, parent_snapshot_id, revision ' +
+          'FROM sync_snapshots WHERE subject = $1 ' +
+          (cursor === undefined ? '' : 'AND revision < $2 ') +
+          'ORDER BY revision DESC LIMIT ' +
+          (cursor === undefined ? '$2' : '$3')
+        const values = cursor === undefined
+          ? [subject, limit] : [subject, cursor, limit]
+        const { rows } = await client.query(sql, values)
         return rows.map(row => ({
           snapshotId: String(row.snapshot_id),
           parentSnapshotId: row.parent_snapshot_id === null ? null : String(row.parent_snapshot_id),

@@ -33,7 +33,12 @@ export interface SyncRepository {
   /** All methods MUST scope reads and writes to the verified subject. */
   readHead(subject: string): Promise<SyncHead>
   readSnapshot(subject: string, snapshotId: string): Promise<SyncSnapshotV1 | null>
-  readHistory(subject: string): Promise<ReadonlyArray<{
+  readHistory(subject: string, options?: {
+    /** Descending, exclusive revision cursor. Omit for latest entries. */
+    beforeRevision?: number
+    /** The handler requests page size + 1 to prove whether more exist. */
+    limit?: number
+  }): Promise<ReadonlyArray<{
     snapshotId: string
     parentSnapshotId: string | null
     revision: number
@@ -63,6 +68,20 @@ export type SyncServiceDependencies = {
 
 export const MAX_SYNC_REQUEST_BYTES = MAX_SYNC_HTTP_BODY_BYTES
 export const MAX_SYNC_RESPONSE_BYTES = MAX_SYNC_HTTP_BODY_BYTES
+export const SYNC_HISTORY_PAGE_SIZE = 100
+
+/** Invalid or duplicate cursors fail closed; unknown parameters are denied. */
+function historyCursor(url: URL): number | null {
+  const params = [...url.searchParams.entries()]
+  if (params.length === 0) return null
+  if (params.length !== 1 || params[0][0] !== 'before' ||
+    !/^[1-9][0-9]*$/.test(params[0][1])) {
+    throw Error('invalid-history-cursor')
+  }
+  const cursor = Number(params[0][1])
+  if (!Number.isSafeInteger(cursor)) throw Error('invalid-history-cursor')
+  return cursor
+}
 
 function json(body: unknown, status = 200): Response {
   return Response.json(body, {
@@ -181,7 +200,22 @@ export function createGuardedSyncHandler(dependencies: SyncServiceDependencies) 
         return json(await dependencies.repository.readHead(session.subject))
       }
       if (request.method === 'GET' && isHistory) {
-        return json({ history: await dependencies.repository.readHistory(session.subject) })
+        let beforeRevision: number | null
+        try { beforeRevision = historyCursor(url) }
+        catch { return fail(400, 'invalid-history-cursor') }
+        const rows = await dependencies.repository.readHistory(session.subject, {
+          ...(beforeRevision === null ? {} : { beforeRevision }),
+          limit: SYNC_HISTORY_PAGE_SIZE + 1
+        })
+        const hasMore = rows.length > SYNC_HISTORY_PAGE_SIZE
+        const history = rows.slice(0, SYNC_HISTORY_PAGE_SIZE)
+        const nextBeforeRevision = hasMore
+          ? history[history.length - 1]?.revision ?? null : null
+        const result = { history, hasMore, nextBeforeRevision }
+        if (serializedSyncJsonBytes(result) > MAX_SYNC_RESPONSE_BYTES) {
+          return fail(503, 'history-exceeds-host-limit')
+        }
+        return json(result)
       }
       if (isReadSnapshot) {
         const id = snapshotMatch![1]
