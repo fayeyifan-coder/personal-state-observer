@@ -81,6 +81,26 @@ export function getFirstQuestion(
   }) ?? null
 }
 
+/**
+ * A saved phase may point at a question removed in a later questionnaire
+ * version. Resume at a still-visible question instead of leaving editing
+ * stuck at a deleted ID. Prefer unfinished questions; if all are answered,
+ * return the final visible question so historical entries remain editable.
+ *
+ * Does NOT modify answers or completion status.
+ */
+export function getResumeQuestionId(
+  answers: Record<string, unknown>,
+  lastQuestionId: string | null,
+  phase: ObservationPhase
+): string | null {
+  const visible = visibleQuestions(answers, phase)
+  if (lastQuestionId && visible.some(question => question.id === lastQuestionId)) {
+    return lastQuestionId
+  }
+  return getFirstQuestion(answers, phase)?.id ?? visible.at(-1)?.id ?? null
+}
+
 export function getPreviousQuestion(
   answers: Record<string, unknown>,
   currentId: string | null,

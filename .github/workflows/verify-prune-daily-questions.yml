@@ -1,0 +1,37 @@
+name: Verify retired daily questionnaire questions do not delete history
+
+on:
+  push:
+    branches:
+      - fix/prune-never-answered-daily-questions-20261028
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  retired-question-compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Check removed fields, retained historic answers, edit resume and conditional questions
+        run: npx tsx tests/pruned-daily-questions.test.ts
+      - name: Existing question flow, data contract, analysis and preview regressions
+        run: |
+          npm run test:logic
+          npm run test:analysis
+          npm run test:preview
+      - name: Production TypeScript and build (no deployment)
+        run: npm run build

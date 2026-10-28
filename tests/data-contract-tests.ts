@@ -29,7 +29,7 @@ const allQuestions = [...QUESTIONS, ...OPTIONAL_QUESTIONS]
 const ids = allQuestions.map(question => question.id)
 
 assert(new Set(ids).size === ids.length, 'question IDs are unique')
-assert(allQuestions.length === 40, 'question model contains 40 questions')
+assert(allQuestions.length === 37, 'question model contains 37 active questions after pruning unused prompts')
 
 const invalidPhases = QUESTIONS.filter(
   question => question.phase !== 'morning' && question.phase !== 'evening'
@@ -44,8 +44,8 @@ assert(QUESTIONS[0]?.id === 'sleep_quality', 'morning observation starts with sl
 assertPhase('mood', 'evening')
 assertPhase('acne_presence', 'evening')
 assertPhase('bowel_movement_count', 'evening')
-assertPhase('protein_intake_g', 'evening')
-assertPhase('basal_temperature_c', 'morning')
+assert(!getQuestion('protein_intake_g'), 'retired protein prompt no longer appears in the daily questionnaire')
+assert(!getQuestion('basal_temperature_c') && !getQuestion('weight_kg'), 'retired morning measurements are not presented')
 assertPhase('period_start', 'evening')
 
 // These fields intentionally use their canonical camelCase storage keys as question IDs.
