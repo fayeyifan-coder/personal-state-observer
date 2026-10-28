@@ -1,0 +1,15 @@
+# Isolated synthetic-only acceptance site. Never use this file to deploy real health data.
+[build]
+  command = "npm run build:testlab"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Cache-Control = "no-store"
