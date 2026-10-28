@@ -46,3 +46,14 @@
 ## 工程状态
 
 `feat/sync-service-guardrails-20261028`（PR #6）当前提供本地可测试的接口合同；默认关闭，没有 Netlify Function 路由、数据库连接或云端同步。**创建一座空数据库不会自动启用这个合同。** 本文件也不注册迁移、SQL、Functions、部署钩子或依赖，不会自动创建数据库，所有云端操作都需要用户在控制台手动确认。
+
+
+## 用户已完成的试建结果（2026-10-28 截图）
+
+- Netlify 项目 `cheerful-licorice-f4602a` 的 Database 显示 **Your database is ready!**。
+- 截图配置：auto-scale 1 compute unit、闲置 5 分钟休眠、24h compute `0.0 GB-hours`、总存储 `0 bytes`、分支 `production`，共 `1/20`。
+- 此前 Free 账户截图显示剩余 **255/300 credits**；余额不是数据库新建后实时度量，需要实际 Billing 页再核对。
+- **仅能判定空数据库创建成功**，尚无同步表、查询测试、认证、云端写入或电脑读取功能；真实手机 IndexedDB 未改变。
+- 后续 PostgreSQL schema 与事务适配器正在独立草稿 PR #8 中使用**临时 CI 数据库**验证，数据库草案放在 `docs/sql-drafts`、不自动执行。
+
+**阶段结论：测试数据库创建 PASS；真实 Netlify 数据库读写验收 NOT STARTED。**
