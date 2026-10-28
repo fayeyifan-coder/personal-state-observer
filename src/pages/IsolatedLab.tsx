@@ -5,6 +5,7 @@ import { downloadBackup } from '../services/backup'
 import { makeSyntheticLabBackup, syntheticLabRecords } from '../services/testLabFixtures'
 import { LabLoginDiagnostic } from '../components/LabLoginDiagnostic'
 import { LocalTestDeviceKeyPanel } from '../components/LocalTestDeviceKeyPanel'
+import { LocalPairingRehearsalPanel } from '../components/LocalPairingRehearsalPanel'
 
 const forbiddenOrigin = 'https://fayeyifan-coder.github.io'
 
@@ -67,6 +68,7 @@ export function IsolatedLab() {
         <p role="status">{status}</p>
         <LabLoginDiagnostic />
         <LocalTestDeviceKeyPanel />
+        <LocalPairingRehearsalPanel />
       </section>
       <DataPage key={revision} />
     </div>
