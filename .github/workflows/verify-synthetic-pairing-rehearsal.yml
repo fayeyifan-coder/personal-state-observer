@@ -40,3 +40,22 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Browser proof with saved CryptoKey and zero network writes
         run: node tests/isolated-lab.browser.mjs
+
+  webkit-pairing-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build isolated synthetic lab
+        run: npm run build:testlab
+      - name: Install Linux WebKit (not identical to real iPhone Safari)
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps webkit
+      - name: Persist and prove original phone key under Linux WebKit
+        run: node tests/synthetic-device-key.webkit.browser.mjs
