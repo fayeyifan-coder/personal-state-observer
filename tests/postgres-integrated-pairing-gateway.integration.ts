@@ -69,6 +69,7 @@ try {
   for(const disabled of [
     {...options,enabled:false},
     {...options,pinnedOperatorPublicKey:null},
+    {...options,pinnedOperatorPublicKey:{...operatorPublicKey,d:'untrusted'}},
     {...options,evidenceSigningKey:null},
     {...options,expectedSiteId:crypto.randomUUID()}
   ]) {
@@ -80,6 +81,15 @@ try {
       command(crypto.randomUUID(),'a'.repeat(64),'approve-publisher'),'fake'
     ),'rejected')
   }
+
+  const insecureIssuer = await crypto.subtle.generateKey(
+    {name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']
+  )
+  const insecure = createIsolatedPairingGateway(context,{
+    ...options,evidenceSigningKey:insecureIssuer.privateKey
+  })
+  assert.equal(await insecure.request(deviceId,phoneJwk),null,
+    'extractable evidence signer must disable all routes at composition')
 
   const pending=await gateway.request(deviceId,phoneJwk)
   assert.ok(pending)
