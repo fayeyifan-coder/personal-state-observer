@@ -9,7 +9,7 @@ import { webkit } from 'playwright'
 const origin = 'http://127.0.0.1:4175/'
 const server = spawn(process.execPath, [
   'node_modules/vite/bin/vite.js', 'preview',
-  '--host', '127.0.0.1', '--port', '4175', '--strictPort'
+  '--host', '127.0.0.1', '--port', '4175', '--strictPort', '--mode', 'testlab'
 ], { stdio: 'ignore' })
 async function waitForServer() {
   for (let i=0;i<100;i++) {
