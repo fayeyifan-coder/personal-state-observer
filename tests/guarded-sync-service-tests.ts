@@ -208,7 +208,12 @@ response = await handler(request('POST', '/api/sync/snapshots',
   publish(first, null), principal.otherUser))
 assert.equal(response.status, 201, 'other user has independent private head')
 
-const brokenStore = { ...store, readHead: async () => { throw Error('private DB credentials') } }
+const brokenStore: SyncRepository = {
+  readHead: async () => { throw Error('private DB credentials') },
+  readSnapshot: (subject, id) => store.readSnapshot(subject, id),
+  readHistory: subject => store.readHistory(subject),
+  commitSnapshot: input => store.commitSnapshot(input)
+}
 const errorHandler = createGuardedSyncHandler({
   enabled: true, allowedOrigin: origin, authenticate, repository: brokenStore
 })
