@@ -86,11 +86,11 @@ export function createIsolatedPairingGateway(
   })
   const receiptIssuer = createVerifiedPairingEvidenceIssuer(options.pool, {
     enabled: true, siteId: options.expectedSiteId,
-    signingKey: options.evidenceSigningKey, now: options.now
+    signingKey: issuer, now: options.now
   })
   const operator = createSignedOperatorPairingGate(options.pool, {
     enabled: true, expectedSiteId: options.expectedSiteId,
-    operatorPublicKey: options.pinnedOperatorPublicKey, now: options.now
+    operatorPublicKey: pinned, now: options.now
   })
 
   // Deliberately expose only candidate methods, signed evidence, and
