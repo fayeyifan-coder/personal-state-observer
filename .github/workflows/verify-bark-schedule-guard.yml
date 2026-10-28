@@ -1,0 +1,27 @@
+name: Verify Bark scheduled notification timeliness guard
+
+on:
+  push:
+    branches: [fix/bark-stale-schedule-guard-and-diagnostics-20261028]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-no-push:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify no stale push after hours-long GitHub delays
+        run: node --test tests/bark-schedule-guard.test.mjs
+      - name: Verify no scheduled Bark API request made by CI
+        run: node --input-type=module -e "import { evaluateBarkRun } from './tools/bark-schedule-guard.mjs'; if(evaluateBarkRun({eventName:'push',schedule:'7 0 * * *',now:new Date('2026-10-28T00:07:00Z')}).action !== 'skip') process.exit(1)"
