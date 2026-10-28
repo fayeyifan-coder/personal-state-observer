@@ -1,0 +1,35 @@
+name: Verify Netlify login diagnostic error classification
+
+on:
+  push:
+    branches:
+      - fix/lab-login-404-diagnostic-20261028
+  pull_request:
+    branches:
+      - test/isolated-phone-lab-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Strict read-only function tests
+        run: npm run test:lab-login-diagnostic
+      - name: Existing encrypted and restore safety checks
+        run: npm run test:backup-comparison && npm run test:backup-restore-policy && npm run test:encrypted-backup
+      - name: Build synthetic-only lab
+        run: npm run build:testlab
+      - name: Install Chromium for actual browser test
+        run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - name: Verify JSON 404 vs HTML fallback and fixture isolation
+        run: node tests/isolated-lab.browser.mjs
