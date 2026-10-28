@@ -14,7 +14,7 @@
     "test:backup-comparison": "tsx tests/backup-comparison-tests.ts",
     "test:backup-restore-policy": "tsx tests/backup-restore-policy-tests.ts",
     "test:encrypted-backup": "tsx tests/encrypted-backup-tests.ts",
-    "test:sync-protocol": "tsx tests/sync-protocol-tests.ts"
+    "test:sync-protocol": "tsx tests/sync-envelope-tests.ts && tsx tests/sync-protocol-tests.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
