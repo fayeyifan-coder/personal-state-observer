@@ -15,7 +15,8 @@
     "test:backup-restore-policy": "tsx tests/backup-restore-policy-tests.ts",
     "test:encrypted-backup": "tsx tests/encrypted-backup-tests.ts",
     "build:testlab": "tsc -b && vite build --mode testlab",
-    "test:lab-login-diagnostic": "tsx tests/lab-login-diagnostic-tests.ts"
+    "test:lab-login-diagnostic": "tsx tests/lab-login-diagnostic-tests.ts",
+    "test:pairing-wire-contract": "tsx tests/synthetic-pairing-contract-tests.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
