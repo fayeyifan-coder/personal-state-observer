@@ -6,6 +6,7 @@ import { createDailyRecord } from '../app/createDailyRecord'
 import { getDay, saveDay } from '../db/records'
 import {
   getField,
+  getFirstQuestion,
   getResumeQuestionId,
   getVisibleQuestions,
   getNextQuestion,
