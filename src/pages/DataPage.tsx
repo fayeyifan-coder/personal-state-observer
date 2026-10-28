@@ -117,7 +117,7 @@ export function DataPage() {
 
   async function handleSafeRestore() {
     const preview = backupPreview
-    if (!preview || restoreBusy || !canSafelyReplaceWithBackup(preview.comparison)) return
+    if (!preview || restoreBusy || !canSafelyReplaceWithBackup(preview.comparison, preview.snapshot)) return
     const confirmed = window.confirm(
       '这不是合并操作，而是用备份整体替换本机数据。检查结果未发现本机独有记录或内容冲突。' +
       '\\n\\n请确认已另外保存本机 JSON 备份，并且确实要恢复该文件。'
@@ -238,7 +238,7 @@ export function DataPage() {
     { name: '设备数据', data: backupPreview.comparison.deviceData }
   ] : []
   const previewSafeToReplace = backupPreview
-    ? canSafelyReplaceWithBackup(backupPreview.comparison)
+    ? canSafelyReplaceWithBackup(backupPreview.comparison, backupPreview.snapshot)
     : false
 
   const recentDeviceData = [...deviceData]
@@ -414,9 +414,7 @@ export function DataPage() {
                       <span>{row.data.identical.length}</span>
                     </div>
                   ))}
-                  {previewRows.some(row =>
-                    row.data.duplicateLocalKeys.length || row.data.duplicateIncomingKeys.length
-                  ) && (
+                  {getRestoreBlockReasons(backupPreview.comparison, backupPreview.snapshot).includes('duplicate-keys') && (
                     <p className="backup-warning">检测到同一逻辑日期或标记 ID 重复，已禁止恢复。</p>
                   )}
                   {previewRows.some(row => row.data.localOnly.length || row.data.conflicts.length) && (
@@ -438,7 +436,7 @@ export function DataPage() {
                   ) : (
                     <p className="backup-warning">
                       为保护当前设备的数据，暂不允许覆盖。请保留两端的 JSON 备份，等待安全合并功能。
-                      （{getRestoreBlockReasons(backupPreview.comparison).join(' / ')}）
+                      （{getRestoreBlockReasons(backupPreview.comparison, backupPreview.snapshot).map(reason => ({ 'local-only': '本机独有', conflicts: '内容冲突', 'duplicate-keys': '重复标识' })[reason]).join('、')}）
                     </p>
                   )}
                   <div className="backup-compare-actions">
