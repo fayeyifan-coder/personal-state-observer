@@ -1,0 +1,35 @@
+name: Verify opt-in Workspace read-only summary export (NO DEPLOY)
+
+on:
+  push:
+    branches: [feat/workspace-readonly-metrics-export-20261029]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  workspace-snapshot-source:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build snapshot, reject raw notes, verify schema and historical field preservation
+        run: npx tsx tests/workspace-snapshot.test.ts
+      - name: Existing logic and backup preview regression
+        run: |
+          npm run test:logic
+          npm run test:analysis
+          npm run test:preview
+      - name: Typecheck and production build without deployment
+        run: npm run build
