@@ -1,0 +1,47 @@
+name: Verify signed pairing evidence and offline trusted approval
+
+on:
+  push:
+    branches:
+      - feat/trusted-pairing-evidence-20261028
+  pull_request:
+    branches:
+      - feat/windows-offline-operator-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  signed-evidence:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned project dependencies
+        run: npm ci
+      - name: Signed evidence and operator manifest tamper tests
+        run: npx tsx --test tests/verified-pairing-evidence.test.ts tests/operator-offline-cli.test.mjs
+      - name: Linux terminal ceremony with independent issuer pin
+        if: runner.os == 'Linux'
+        run: python3 tests/operator-offline-tty-smoke.py
+      - name: Existing private project and pairing logic regressions
+        run: |
+          npm run test:manual-pairing
+          npm run test:private-device-auth
+          npm run test:encrypted-backup
+      - name: Ensure official app still builds without operator features
+        run: npm run build
+      - name: No real key files in checkout
+        shell: bash
+        run: |
+          test ! -e operator-encrypted-private.pem
+          test ! -e operator-public.json
+          test ! -e trusted-receipt-issuer.json
