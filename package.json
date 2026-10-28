@@ -14,7 +14,7 @@
     "test:backup-comparison": "tsx tests/backup-comparison-tests.ts",
     "test:backup-restore-policy": "tsx tests/backup-restore-policy-tests.ts",
     "test:encrypted-backup": "tsx tests/encrypted-backup-tests.ts",
-    "build:testlab": "VITE_ISOLATED_LAB=1 npm run build"
+    "build:testlab": "tsc -b && vite build --mode testlab"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
