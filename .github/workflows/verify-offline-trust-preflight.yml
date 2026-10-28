@@ -1,0 +1,44 @@
+name: Verify offline Windows trust self-test and public-key preflight
+
+on:
+  push:
+    branches:
+      - feat/offline-operator-safety-preflight-20261028
+  pull_request:
+    branches:
+      - feat/trusted-pairing-evidence-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  offline-preflight:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Pure-memory self-test and externally supplied fingerprint checks
+        run: node --test tests/operator-offline-preflight.test.mjs
+      - name: Existing server evidence and operator signing protocol tests
+        run: npx tsx --test tests/verified-pairing-evidence.test.ts tests/operator-offline-cli.test.mjs
+      - name: Linux real interactive fixture approval
+        if: runner.os == 'Linux'
+        run: python3 tests/operator-offline-tty-smoke.py
+      - name: Verify production app build remains unchanged
+        run: npm run build
+      - name: No committed operator PEM or evidence private key
+        shell: bash
+        run: |
+          test ! -e operator-encrypted-private.pem
+          test ! -e operator-public.json
+          test ! -e trusted-receipt-issuer.json
