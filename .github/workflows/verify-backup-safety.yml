@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - feat/backup-preview-ui-20261028
+      - feat/encrypted-snapshot-20261028
   pull_request:
     branches:
       - main
       - feat/backup-comparison-preflight-20261028
+      - feat/backup-preview-ui-20261028
 
 permissions:
   contents: read
@@ -32,6 +34,8 @@ jobs:
         run: npm run test:backup-comparison
       - name: Check safe backup restore policy
         run: npm run test:backup-restore-policy
+      - name: Check encrypted snapshot integrity
+        run: npm run test:encrypted-backup
       - name: Typecheck and build
         run: npm run build
       - name: Install isolated browser test dependencies
