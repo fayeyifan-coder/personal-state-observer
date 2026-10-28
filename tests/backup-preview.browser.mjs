@@ -116,7 +116,21 @@ try {
       name: 'synthetic-backup.json', mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(backup(data, opts)))
     })
-    await page.getByRole('region', { name: '备份差异预览' }).waitFor()
+    try {
+      await page.getByRole('region', { name: '备份差异预览' }).waitFor({ timeout: 8000 })
+    } catch (cause) {
+      const state = await page.evaluate(() => ({
+        location: location.href,
+        online: navigator.onLine,
+        messages: [...document.querySelectorAll('.inline-message,.inline-error')]
+          .map(element => element.textContent),
+        hasInput: !!document.querySelector('input[type=file]'),
+        visibleRegions: [...document.querySelectorAll('[role=region]')]
+          .map(element => element.getAttribute('aria-label'))
+      }))
+      throw new Error('Backup preview did not appear; isolated test UI state: ' +
+        JSON.stringify(state), { cause })
+    }
   }
   async function denied() {
     assert.equal(await page.getByRole('button', { name: '确认以备份替换本机数据' }).count(), 0)
