@@ -29,7 +29,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
-function base64ToBytes(text: string, exactLength?: number): Uint8Array {
+function base64ToBytes(text: string, exactLength?: number): Uint8Array<ArrayBuffer> {
   if (text.length === 0 || text.length % 4 !== 0 ||
       !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(text)) {
     throw new Error('加密备份的编码格式不正确。')
@@ -43,7 +43,7 @@ function base64ToBytes(text: string, exactLength?: number): Uint8Array {
   return bytes
 }
 
-async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveKey(passphrase: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']
   )
