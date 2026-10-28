@@ -1,0 +1,59 @@
+name: Verify synthetic Safari signing feedback and WebKit compatibility
+
+on:
+  push:
+    branches:
+      - fix/testlab-safari-signature-feedback-20261028
+  pull_request:
+    branches:
+      - test/isolated-phone-lab-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Backup encryption and login diagnostic checks
+        run: |
+          npm run test:backup-comparison
+          npm run test:backup-restore-policy
+          npm run test:encrypted-backup
+          npm run test:lab-login-diagnostic
+      - name: Compile both variants
+        run: |
+          npm run build
+          npm run build:testlab
+      - name: Install Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Full synthetic lab regression
+        run: node tests/isolated-lab.browser.mjs
+
+  webkit-key-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Compile synthetic-only lab
+        run: npm run build:testlab
+      - name: Install Linux WebKit runner
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps webkit
+      - name: Probe saved key across reload in online WebKit
+        run: node tests/synthetic-device-key.webkit.browser.mjs

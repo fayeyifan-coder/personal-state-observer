@@ -25,6 +25,17 @@ export type LocalTestKeyDetails = {
   locallyVerified: boolean
 }
 
+// Diagnostic stages contain no private key bytes, public coordinates or account IDs.
+export type LocalKeyVerifyStage =
+  | 'opening-database'
+  | 'reading-key'
+  | 'checking-metadata'
+  | 'importing-public-key'
+  | 'hashing-fingerprint'
+  | 'signing-challenge'
+  | 'verifying-signature'
+
+
 function assertSyntheticLab(): void {
   const hostname = location.hostname
   const allowedHost = hostname === '127.0.0.1' ||
@@ -96,8 +107,13 @@ function toHex(bytes: ArrayBuffer): string {
 }
 
 /** Return only non-secret metadata, never raw CryptoKey / public-key coordinates. */
-async function details(record: LocalFixtureKey, verify: boolean): Promise<LocalTestKeyDetails> {
+async function details(
+  record: LocalFixtureKey, verify: boolean,
+  onStage?: (stage: LocalKeyVerifyStage) => void
+): Promise<LocalTestKeyDetails> {
+  onStage?.('checking-metadata')
   validKey(record)
+  onStage?.('importing-public-key')
   const publicKey = await crypto.subtle.importKey(
     'jwk', record.publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']
   )
@@ -105,6 +121,7 @@ async function details(record: LocalFixtureKey, verify: boolean): Promise<LocalT
     kty: 'EC', crv: 'P-256',
     x: record.publicJwk.x, y: record.publicJwk.y
   })
+  onStage?.('hashing-fingerprint')
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fingerprintText))
   let verified = false
   if (verify) {
@@ -112,9 +129,11 @@ async function details(record: LocalFixtureKey, verify: boolean): Promise<LocalT
     const signed = new Uint8Array(new TextEncoder().encode(PURPOSE).length + nonce.length)
     signed.set(new TextEncoder().encode(PURPOSE))
     signed.set(nonce, signed.length - nonce.length)
+    onStage?.('signing-challenge')
     const signature = await crypto.subtle.sign(
       { name: 'ECDSA', hash: 'SHA-256' }, record.privateKey, signed
     )
+    onStage?.('verifying-signature')
     verified = await crypto.subtle.verify(
       { name: 'ECDSA', hash: 'SHA-256' }, publicKey, signature, signed
     )
@@ -167,13 +186,17 @@ export async function createLocalTestPhoneKey(): Promise<LocalTestKeyDetails> {
 }
 
 /** Proves possession locally; doesn't transmit a signature to any server. */
-export async function verifyLocalTestPhoneKey(): Promise<LocalTestKeyDetails> {
+export async function verifyLocalTestPhoneKey(
+  onStage?: (stage: LocalKeyVerifyStage) => void
+): Promise<LocalTestKeyDetails> {
   assertSyntheticLab()
+  onStage?.('opening-database')
   const db = await openKeyStore()
   try {
+    onStage?.('reading-key')
     const record = await readStoredKey(db)
     if (!record) throw Error('此浏览器尚未生成测试密钥。')
-    return details(record, true)
+    return details(record, true, onStage)
   } finally {
     db.close()
   }
