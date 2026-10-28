@@ -1,0 +1,36 @@
+name: Verify low-frequency offline phone-to-PC analysis handoff (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - feat/periodic-offline-analysis-handoff-20261028
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  offline-handoff:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify 7/14-day due date, no private text leakage and no browser mutations
+        run: npx tsx tests/offline-analysis-handoff.test.ts
+      - name: Existing analysis and record contract regressions
+        run: |
+          npm run test:analysis
+          npm run test:contract
+      - name: Production app builds without hosted sync or new credentials
+        run: npm run build
