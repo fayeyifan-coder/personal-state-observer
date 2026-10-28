@@ -128,6 +128,22 @@ try {
   assert.equal(keyNetworkRequests, 0, 'local key tests never transmit data')
   page.off('request', trackKeys)
   assert.deepEqual(await readTestDB(), initial, 'key operations do not mutate observations')
+  // The normal exported backup must never include this separate device
+  // identity or a CryptoKey, even while the key is actively persisted.
+  const [keylessDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: '导出 JSON 备份' }).click()
+  ])
+  const exportedWhileKeyExists = (await readFile(await keylessDownload.path())).toString('utf8')
+  const identityText = await deviceAfterReload.locator('[data-testid="fixture-key-identity"]').innerText()
+  const deviceId = identityText.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/i)?.[0]
+  assert.ok(deviceId, 'test device ID must be visible to human without private key')
+  assert.doesNotMatch(exportedWhileKeyExists, new RegExp(deviceId, 'i'))
+  assert.doesNotMatch(exportedWhileKeyExists, /personal-state-observer-synthetic-device-key|privateKey|publicJwk|fingerprint/)
+  // Dismissing confirmation must never delete the key.
+  page.once('dialog', dialog => dialog.dismiss())
+  await deviceAfterReload.getByRole('button', { name: '清除未配对测试密钥' }).click()
+  assert.equal(await deviceAfterReload.locator('[data-testid="fixture-key-identity"]').count(), 1)
   // Deleting an unpaired fixture key always requires a browser confirmation.
   page.once('dialog', dialog => dialog.accept())
   await deviceAfterReload.getByRole('button', { name: '清除未配对测试密钥' }).click()
