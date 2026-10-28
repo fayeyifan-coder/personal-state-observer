@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createPublicKey, webcrypto, randomUUID } from 'node:crypto'
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -135,8 +135,7 @@ test('CLI refuses non-interactive key creation and accepts no password flags',()
     assert.equal(existsSync(out),false)
     // Even an already-signed fixture can be checked with zero secrets or network.
     const dir=join(fixture,'fixture-key')
-    const fs = await import('node:fs')
-    fs.mkdirSync(dir)
+    mkdirSync(dir)
     writeFileSync(join(dir,'operator-public.json'),
       JSON.stringify(manifest))
     writeFileSync(join(dir,'operator-encrypted-private.pem'),encryptedPrivatePem)
