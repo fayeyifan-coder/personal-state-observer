@@ -1,0 +1,36 @@
+name: Verify offline issuer rotation continuity and no automatic trust change
+
+on:
+  push:
+    branches:
+      - feat/offline-issuer-rotation-audit-20261028
+  pull_request:
+    branches:
+      - feat/offline-operator-safety-preflight-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  offline-rotation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Triple-signed issuer rotation, lost key and tamper rejection
+        run: node --test tests/issuer-rotation-audit.test.mjs
+      - name: Previous offline key and first-trust regressions
+        run: node --test tests/operator-offline-preflight.test.mjs
+      - name: Server receipt and operator signature parity
+        run: npx tsx --test tests/verified-pairing-evidence.test.ts tests/operator-offline-cli.test.mjs
+      - name: Official production build unchanged
+        run: npm run build
