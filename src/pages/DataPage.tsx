@@ -19,6 +19,7 @@ import {
 } from '../db/records'
 import type { AppBackup, DailyRecord, DeviceDailyData, PeriodLabel } from '../types'
 import { getLocalDateKey } from '../utils/dateUtils'
+import { markBackupForCurrentEnvironment, assertPreviewBackupAllowed } from '../services/testLabFixtures'
 
 function emptyDeviceForm(date = getLocalDateKey()) {
   return {
@@ -113,7 +114,7 @@ export function DataPage() {
       setError('')
       // Always export a fresh IndexedDB snapshot rather than cached page state.
       const current = await readAllData()
-      downloadBackup(createBackup(current.dailyRecords, current.periodLabels, current.deviceData))
+      downloadBackup(markBackupForCurrentEnvironment(createBackup(current.dailyRecords, current.periodLabels, current.deviceData)))
       setMessage('本机备份已生成，请保留旧版本。')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '导出失败。')
@@ -131,7 +132,7 @@ export function DataPage() {
     try {
       const current = await readAllData()
       const encrypted = await encryptBackup(
-        createBackup(current.dailyRecords, current.periodLabels, current.deviceData),
+        markBackupForCurrentEnvironment(createBackup(current.dailyRecords, current.periodLabels, current.deviceData)),
         exportPassword
       )
       downloadEncryptedBackup(encrypted)
@@ -146,6 +147,7 @@ export function DataPage() {
   }
 
   async function previewParsed(snapshot: AppBackup, filename: string, request: number) {
+    assertPreviewBackupAllowed(snapshot)
     const current = await readAllData()
     if (request !== latestImportRequest.current) return
     setBackupPreview({ filename, snapshot, comparison: compareBackupCollections(current, snapshot) })

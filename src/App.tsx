@@ -5,8 +5,10 @@ import { TodayPage } from './pages/TodayPage';
 import { TimelinePage } from './pages/TimelinePage';
 import { DataPage } from './pages/DataPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { IsolatedLab } from './pages/IsolatedLab';
 
 export function App() {
+  if (import.meta.env?.VITE_ISOLATED_LAB === '1') return <IsolatedLab />;
   // 监听网页 hash 的变化
   const [hash, setHash] = useState(window.location.hash);
 

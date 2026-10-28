@@ -1,0 +1,39 @@
+name: Verify isolated phone test site
+
+on:
+  push:
+    branches:
+      - test/isolated-phone-lab-20261028
+  pull_request:
+    branches:
+      - feat/encrypted-snapshot-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  verify-synthetic-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Compile normal site without deploying
+        run: npm run build
+      - name: Compile isolated root-hosted test site
+        run: npm run build:testlab
+      - name: Install browser test tools
+        run: npm install --no-save --package-lock=false playwright@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Test isolated site and fixture protections
+        run: node tests/isolated-lab.browser.mjs
+      - name: Install WebKit for minimal offline File API diagnosis
+        run: npx playwright install --with-deps webkit
+      - name: Probe WebKit in-memory File APIs independently of the app
+        run: node tests/webkit-offline-file.probe.mjs
