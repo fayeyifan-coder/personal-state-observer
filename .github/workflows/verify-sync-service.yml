@@ -1,0 +1,37 @@
+name: Verify guarded sync service (offline fixtures only)
+
+on:
+  push:
+    branches:
+      - feat/sync-service-guardrails-20261028
+  pull_request:
+    branches:
+      - feat/sync-protocol-foundation-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Verify existing logic and backup safety
+        run: |
+          npm run test:logic
+          npm run test:analysis
+          npm run test:backup-comparison
+          npm run test:backup-restore-policy
+          npm run test:encrypted-backup
+          npm run test:sync-protocol
+      - name: Verify authenticated sync contract with synthetic data
+        run: npm run test:sync-service
+      - name: Typecheck and build without deploying
+        run: npm run build
