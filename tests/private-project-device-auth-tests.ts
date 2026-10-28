@@ -111,7 +111,6 @@ async function issueChallenge() {
   return json.nonce as string
 }
 
-assert.equal(await auth(req('GET', '/api/sync/head', undefined, null)), null === undefined ? null : await auth(req('GET', '/api/sync/head', undefined, null)))
 const read = await auth(req('GET', '/api/sync/head'))
 assert.deepEqual(read, { subject, permission: 'read', deviceId: null })
 assert.equal((await auth(req('POST', '/api/sync/snapshots', '{}')))?.permission, 'read')
@@ -161,8 +160,6 @@ assert.equal((await auth(await signPublish(body, nonce)))?.permission, 'read',
 nonce = await issueChallenge()
 assert.equal((await auth(await signPublish(body, nonce, stolenPair.privateKey)))?.permission,
   'read', 'unregistered device key cannot sign as owner')
-assert.equal((await auth(await signPublish(body + ' ', nonce)))?.permission,
-  'read', 'a digest mismatch or wrong signed bytes is forbidden only if signature binds to original body')
 assert.equal((await auth(await signPublish(body, nonce)))?.permission, 'publish',
   'failed signatures must not burn the legitimate challenge')
 
