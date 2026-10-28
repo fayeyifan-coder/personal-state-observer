@@ -28,9 +28,10 @@ jobs:
       - run: npm ci
       - name: Check removed fields, retained historic answers, edit resume and conditional questions
         run: npx tsx tests/pruned-daily-questions.test.ts
-      - name: Existing question flow and data-contract regression
+      - name: Existing question flow, data contract, analysis and preview regressions
         run: |
           npm run test:logic
-          npm run test:backup-comparison
+          npm run test:analysis
+          npm run test:preview
       - name: Production TypeScript and build (no deployment)
         run: npm run build
