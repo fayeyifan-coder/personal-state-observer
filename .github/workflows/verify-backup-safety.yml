@@ -1,0 +1,36 @@
+name: Verify backup safety
+
+on:
+  push:
+    branches:
+      - feat/backup-preview-ui-20261028
+  pull_request:
+    branches:
+      - main
+      - feat/backup-comparison-preflight-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check existing logic contracts
+        run: npm run test:logic
+      - name: Check analysis
+        run: npm run test:analysis
+      - name: Check backup comparison
+        run: npm run test:backup-comparison
+      - name: Check safe backup restore policy
+        run: npm run test:backup-restore-policy
+      - name: Typecheck and build
+        run: npm run build
