@@ -144,6 +144,43 @@ try {
   await deviceAfterReload.getByText(/已找到此前生成的本机测试密钥/).waitFor()
   await deviceAfterReload.getByRole('button', { name: '验证本机签名（不联网）' }).click()
   await deviceAfterReload.getByText(/本机签名验证通过/).waitFor()
+  // The pairing wire-format rehearsal must use the SAME original key.
+  // It is entirely local and cannot grant publishing or contact the server.
+  const rehearsing = page.getByRole('region', { name: '本地配对演练' })
+  await rehearsing.getByRole('button', { name: '生成本地模拟配对申请' }).click()
+  await rehearsing.getByText(/模拟申请已生成/).waitFor()
+  const publicFingerprint = await rehearsing.locator(
+    '[data-testid="synthetic-pairing-candidate"] code'
+  ).innerText()
+  assert.match(publicFingerprint, /^[0-9a-f]{64}$/)
+  const keySummary = await deviceAfterReload.locator(
+    '[data-testid="fixture-key-identity"]'
+  ).innerText()
+  const shortFingerprint = keySummary.match(/公钥指纹：\s*([0-9a-f]{16})/)?.[1]
+  assert.ok(shortFingerprint && publicFingerprint.startsWith(shortFingerprint),
+    'candidate must match existing saved private key fingerprint')
+  await rehearsing.getByText(/待本机证明（未配对）/).waitFor()
+  await rehearsing.getByRole('button', {
+    name: '使用原密钥证明持有（不联网）'
+  }).click()
+  await rehearsing.getByText(/本机持有证明通过。但没有服务器申请/).waitFor()
+  await rehearsing.getByText(/本机持有证明通过（未配对）/).waitFor()
+  assert.equal(await rehearsing.getByRole('button', {
+    name: '使用原密钥证明持有（不联网）'
+  }).count(), 0, 'one simulated challenge may only be proved once')
+  assert.equal(keyNetworkRequests, 0, 'local pairing rehearsal must make ZERO requests')
+  assert.deepEqual(await readTestDB(), initial,
+    'pairing rehearsal never touches synthetic observation records')
+  await page.reload()
+  await rehearsing.getByText(/尚未生成模拟申请/).waitFor()
+  assert.equal(await rehearsing.locator(
+    '[data-testid="synthetic-pairing-candidate"]'
+  ).count(), 0, 'pending candidate is ephemeral and not restored')
+  await deviceAfterReload.getByText(/已找到此前生成的本机测试密钥/).waitFor()
+  await deviceAfterReload.getByRole('button', {
+    name: '验证本机签名（不联网）'
+  }).click()
+  await deviceAfterReload.getByText(/本机签名验证通过/).waitFor()
   assert.equal(keyNetworkRequests, 0, 'local key tests never transmit data')
   page.off('request', trackKeys)
   assert.deepEqual(await readTestDB(), initial, 'key operations do not mutate observations')
