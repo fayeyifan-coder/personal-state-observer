@@ -75,7 +75,7 @@ try {
   await diagnostic.waitFor()
   await diagnostic.getByText(/尚未检查/).waitFor()
   let diagnosticRequests = 0
-  const diagnosticRoute = '**/api/lab-login-status'
+  const diagnosticRoute = '**/.netlify/functions/lab-login-status'
   await page.route(diagnosticRoute, async route => {
     diagnosticRequests++
     assert.equal(route.request().method(), 'GET')
