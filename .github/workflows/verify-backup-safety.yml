@@ -44,3 +44,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run real browser backup acceptance
         run: node tests/backup-preview.browser.mjs
+      - name: Install WebKit test browser
+        run: npx playwright install --with-deps webkit
+      - name: Run WebKit backup acceptance
+        run: BROWSER_ENGINE=webkit node tests/backup-preview.browser.mjs
