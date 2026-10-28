@@ -58,3 +58,9 @@ export function assertPreviewBackupAllowed(value: unknown): void {
     throw new Error('虚构测试备份不能恢复到正式个人状态观察器。')
   }
 }
+
+export function markBackupForCurrentEnvironment(snapshot: AppBackup): AppBackup {
+  return import.meta.env?.VITE_ISOLATED_LAB === '1'
+    ? markSyntheticLabBackup(snapshot)
+    : snapshot
+}
