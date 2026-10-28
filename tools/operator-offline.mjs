@@ -9,6 +9,7 @@ import * as fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import readline from 'node:readline'
+import { createInterface as createPromiseInterface } from 'node:readline/promises'
 import {
   createOfflineOperatorKey, assertOperatorManifest,
   createProposedCommand, signOfflineOperatorCommand,
@@ -71,10 +72,10 @@ function loadDir(value) {
   const encryptedPem=fs.readFileSync(path.join(dir,PRIVATE_NAME),'utf8')
   return {dir,manifest,encryptedPem}
 }
-function promptText(label){
+async function promptText(label){
   if(!stdin.isTTY||!stdout.isTTY)fail('敏感操作必须在交互式终端进行')
-  const iface=readline.createInterface({input:stdin,output:stdout})
-  return iface.question(label,answer=>iface.close())
+  const iface=createPromiseInterface({input:stdin,output:stdout})
+  try {return await iface.question(label)} finally {iface.close()}
 }
 readline.emitKeypressEvents(stdin)
 function promptSecret(label) {
@@ -167,11 +168,8 @@ async function main() {
     })
     show(command)
     const passphrase=await promptSecret('审批私钥口令（本机解锁，不显示）：')
-    // Construct the 90s one-time command immediately before signing:
-    const fresh=createProposedCommand(request,manifest,{
-      ownerId:expectedOwner,fingerprint:expectedFingerprint,action:acceptedAction
-    })
-    const signed=signOfflineOperatorCommand(fresh,encryptedPem,passphrase,manifest)
+    // Sign exactly the same previewed command, not a fresh unseen nonce.
+    const signed=signOfflineOperatorCommand(command,encryptedPem,passphrase,manifest)
     fs.writeFileSync(target,JSON.stringify(signed,null,2)+'\n',{
       flag:'wx',mode:0o600
     })
