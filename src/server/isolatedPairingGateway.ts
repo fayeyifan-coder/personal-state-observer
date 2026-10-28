@@ -64,8 +64,18 @@ export function createIsolatedPairingGateway(
   trustedContext: TrustedPrivateProjectContext,
   options: IsolatedPairingGatewayOptions
 ): PairingGateway {
+  const issuer = options.evidenceSigningKey
+  const pinned = options.pinnedOperatorPublicKey
   if (!options.enabled || !UUID.test(options.expectedSiteId) ||
-    !options.pinnedOperatorPublicKey || !options.evidenceSigningKey) {
+    !issuer || issuer.type !== 'private' || issuer.extractable ||
+    issuer.algorithm?.name !== 'ECDSA' ||
+    (issuer.algorithm as EcKeyAlgorithm).namedCurve !== 'P-256' ||
+    !issuer.usages.includes('sign') ||
+    pinned?.kty !== 'EC' || pinned.crv !== 'P-256' ||
+    typeof pinned.x !== 'string' || typeof pinned.y !== 'string' ||
+    !/^[A-Za-z0-9_-]{43}$/.test(pinned.x) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(pinned.y) ||
+    pinned.d !== undefined) {
     return DISABLED
   }
 
@@ -74,7 +84,7 @@ export function createIsolatedPairingGateway(
     enabled: true, expectedSiteId: options.expectedSiteId,
     store: pendingStore, now: options.now
   })
-  const issuer = createVerifiedPairingEvidenceIssuer(options.pool, {
+  const receiptIssuer = createVerifiedPairingEvidenceIssuer(options.pool, {
     enabled: true, siteId: options.expectedSiteId,
     signingKey: options.evidenceSigningKey, now: options.now
   })
@@ -88,7 +98,7 @@ export function createIsolatedPairingGateway(
   return Object.freeze({
     request: candidate.request,
     prove: candidate.prove,
-    evidence: issuer.issue.bind(issuer, trustedContext),
+    evidence: receiptIssuer.issue.bind(receiptIssuer, trustedContext),
     applySignedOperatorAction: operator.apply
   })
 }
