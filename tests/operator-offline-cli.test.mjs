@@ -114,7 +114,9 @@ test('revoke uses distinct signed action and cannot be changed into approve',asy
   const revokeKey=createOfflineOperatorKey(siteId,password,revokeFixture.trust)
   const revokeManifest=revokeKey.manifest
   const packet=signOfflineOperatorCommand(command,revokeKey.encryptedPrivatePem,password,revokeManifest,now,revokeFixture.receipt)
-  assert.equal(await verifyOperatorCommand(command,packet.signature,verifyConfig),true)
+  assert.equal(await verifyOperatorCommand(command,packet.signature,{
+    ...verifyConfig,operatorPublicKey:revokeManifest.publicJwk
+  }),true)
   assert.equal(verifyOfflineOperatorCommand({...packet,command:{
     ...command,action:'approve-publisher'
   }},revokeManifest,now),false)
