@@ -3,6 +3,7 @@ import { DataPage } from './DataPage'
 import { db } from '../db/database'
 import { downloadBackup } from '../services/backup'
 import { makeSyntheticLabBackup, syntheticLabRecords } from '../services/testLabFixtures'
+import { LabLoginDiagnostic } from '../components/LabLoginDiagnostic'
 
 const forbiddenOrigin = 'https://fayeyifan-coder.github.io'
 
@@ -63,6 +64,7 @@ export function IsolatedLab() {
           }}>下载冲突测试文件</button>
         </div>
         <p role="status">{status}</p>
+        <LabLoginDiagnostic />
       </section>
       <DataPage key={revision} />
     </div>

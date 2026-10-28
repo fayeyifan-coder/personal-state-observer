@@ -69,6 +69,47 @@ try {
     })
   }
   const initial = await readTestDB()
+  // Diagnostic is entirely opt-in; it must never trigger on initial render
+  // and must never alter the local fixture database.
+  const diagnostic = page.getByRole('region', { name: '只读登录诊断' })
+  await diagnostic.waitFor()
+  await diagnostic.getByText(/尚未检查/).waitFor()
+  let diagnosticRequests = 0
+  const diagnosticRoute = '**/api/lab-login-status'
+  await page.route(diagnosticRoute, async route => {
+    diagnosticRequests++
+    assert.equal(route.request().method(), 'GET')
+    assert.equal(route.request().postData(), null)
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({
+        authenticated: true, status: 'verified-private-login',
+        permission: 'read-only', cloudSync: 'not-configured'
+      })
+    })
+  })
+  assert.equal(diagnosticRequests, 0, 'no automatic login probing')
+  await diagnostic.getByRole('button', { name: '检查 Netlify 登录（只读）' }).click()
+  await diagnostic.getByText(/已验证 Netlify 私有站点登录/).waitFor()
+  assert.equal(diagnosticRequests, 1)
+  await page.unroute(diagnosticRoute)
+  await page.route(diagnosticRoute, route => route.fulfill({
+    status: 401, contentType: 'application/json',
+    body: '{"authenticated":false,"status":"login-not-confirmed"}'
+  }))
+  await diagnostic.getByRole('button', { name: '检查 Netlify 登录（只读）' }).click()
+  await diagnostic.getByText(/未能确认 Netlify 登录/).waitFor()
+  await page.unroute(diagnosticRoute)
+  // A static Vite SPA fallback is often HTTP 200 text/html;
+  // it must never be reported as a successful login.
+  await page.route(diagnosticRoute, route => route.fulfill({
+    status: 200, contentType: 'text/html',
+    body: '<!DOCTYPE html><html></html>'
+  }))
+  await diagnostic.getByRole('button', { name: '检查 Netlify 登录（只读）' }).click()
+  await diagnostic.getByText(/只读诊断接口尚未部署/).waitFor()
+  await page.unroute(diagnosticRoute)
+  assert.deepEqual(await readTestDB(), initial, 'diagnostic must not touch IndexedDB')
   assert.deepEqual(initial.map(x => x.recordDate), ['2026-10-26', '2026-10-27'])
   assert.ok(initial.every(x => x.answers.comment === '仅用于测试的虚构记录'))
   const dbNames = await page.evaluate(async () =>
