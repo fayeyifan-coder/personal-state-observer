@@ -110,7 +110,7 @@ export function createVerifiedPairingEvidenceIssuer(
           deadline = Math.min(deadline, expiresAt)
         } else {
           const { rows } = await client.query(
-            'SELECT device_id,public_key_jwk,created_at ' +
+            'SELECT device_id,public_key_jwk ' +
             'FROM sync_publisher_devices ' +
             'WHERE subject=$1 AND device_id=$2 AND revoked_at IS NULL ' +
             'AND public_key_jwk IS NOT NULL',
@@ -126,7 +126,7 @@ export function createVerifiedPairingEvidenceIssuer(
           fingerprint !== String(row.fingerprint).trim()) return null
         const evidenceAt = action === 'approve-publisher'
           ? (row.proved_at as Date)
-          : (row.created_at as Date)
+          : new Date(cfg.now?.() ?? Date.now())
         if (!(evidenceAt instanceof Date) || !Number.isFinite(evidenceAt.getTime()) ||
           !UUID.test(String(row.device_id))) return null
         const issued = cfg.now?.() ?? Date.now()
