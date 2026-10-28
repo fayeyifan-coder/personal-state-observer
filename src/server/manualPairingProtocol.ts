@@ -27,9 +27,6 @@ export type PairingRequest = {
   ownerId: string
 }
 
-export type ApprovalOutcome =
-  | 'approved' | 'already-paired' | 'not-proven' | 'invalid-or-expired'
-
 export interface ManualPairingStore {
   begin(
     subject: string, deviceId: string, publicKeyJwk: JsonWebKey,
@@ -38,15 +35,7 @@ export interface ManualPairingStore {
   read(subject: string, requestId: string): Promise<PendingPairing | null>
   markProven(subject: string, requestId: string): Promise<boolean>
 
-  /**
-   * TRUSTED OPERATOR ONLY: no public route or self-service registration.
-   * Call only after verifying owner intent and matching a fingerprint
-   * out-of-band. The DB implementation locks the account before granting.
-   */
-  approveByOperator(
-    subject: string, requestId: string, expectedFingerprint: string
-  ): Promise<ApprovalOutcome>
-  revokeByOperator(subject: string, deviceId: string): Promise<boolean>
+
 }
 
 export type ManualPairingOptions = {
