@@ -1,0 +1,43 @@
+name: Verify Netlify buffered payload limit and preflight no-deploy boundary
+
+on:
+  push:
+    branches:
+      - fix/netlify-function-payload-and-account-preflight-20261028
+  pull_request:
+    branches:
+      - test/synthetic-hosting-cost-recovery-gates-20261028
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-sync-transport:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Exercise 5 MiB edge, forged Content-Length and legacy oversized download
+        run: npx tsx tests/netlify-function-payload.test.ts
+      - name: Existing encrypted snapshot, publisher challenge and permissions regressions
+        run: |
+          npm run test:sync-service
+          npm run test:private-device-auth
+          npm run test:sync-protocol
+      - name: Keep synthetic hosting and cloud rollback rules
+        run: |
+          node --test tests/synthetic-hosting-gate.test.mjs
+          npx tsx tests/synthetic-cloud-rollback-drill.test.ts
+      - name: Refuse deployment, migration and unsigned operator bypass
+        run: node tools/sync-deployment-boundary-audit.mjs
+      - name: Typecheck and build official application without deploying
+        run: npm run build
