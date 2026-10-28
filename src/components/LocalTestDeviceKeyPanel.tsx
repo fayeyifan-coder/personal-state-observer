@@ -4,8 +4,29 @@ import {
   discardUnpairedLocalTestPhoneKey,
   readLocalTestPhoneKey,
   verifyLocalTestPhoneKey,
-  type LocalTestKeyDetails
+  type LocalTestKeyDetails,
+  type LocalKeyVerifyStage
 } from '../services/syntheticDeviceKeyStore'
+
+const VERIFY_STAGE_LABELS: Record<LocalKeyVerifyStage, string> = {
+  'opening-database': '打开密钥存储',
+  'reading-key': '读取已保存的密钥',
+  'checking-metadata': '检查密钥信息',
+  'importing-public-key': '恢复公钥',
+  'hashing-fingerprint': '核对公钥指纹',
+  'signing-challenge': '使用私钥签名',
+  'verifying-signature': '验证签名结果'
+}
+
+function withDeadline<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
+  let handle: number | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    handle = window.setTimeout(() => reject(new Error('等待 Safari 响应超时。')), timeoutMs)
+  })
+  return Promise.race([task, timeout]).finally(() => {
+    if (handle !== undefined) window.clearTimeout(handle)
+  })
+}
 
 /**
  * Synthetic-only local browser key experiment. Generating a key is NOT
@@ -55,16 +76,31 @@ export function LocalTestDeviceKeyPanel() {
   async function verify() {
     if (!key || busy) return
     setBusy(true)
+    // Display progress before any Safari IndexedDB or WebCrypto operation.
+    // A blocked native promise must not leave an inert-looking button.
+    let currentStage = '准备验证'
+    let awaiting = true
+    setMessage('已收到点击，正在开始本机签名验证……')
     try {
-      const result = await verifyLocalTestPhoneKey()
+      const operation = verifyLocalTestPhoneKey(stage => {
+        if (!awaiting) return
+        currentStage = VERIFY_STAGE_LABELS[stage]
+        setMessage('本机验证进行中：' + currentStage + '……')
+      })
+      const result = await withDeadline(operation, 20000)
       if (result.deviceId !== key.deviceId || result.fingerprint !== key.fingerprint) {
         throw Error('密钥身份与原记录不一致，已停止。')
       }
       setKey(result)
       setMessage('本机签名验证通过：刷新后仍能使用原有密钥。服务器尚未配对。')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '本机签名校验失败。')
+      const reason = error instanceof DOMException
+        ? error.name
+        : error instanceof Error ? error.message.slice(0, 140) : '未知浏览器错误'
+      setMessage('本机签名未完成（' + currentStage + '）：' + reason +
+        '。原测试密钥未删除，也没有向服务器发送信息。')
     } finally {
+      awaiting = false
       setBusy(false)
     }
   }
@@ -96,17 +132,20 @@ export function LocalTestDeviceKeyPanel() {
           状态：{key.locallyVerified ? '本机签名已验证' : '已保存，等待签名校验'} · 服务器尚未配对
         </span>
       </p>}
+      <p role="status" aria-live="polite" data-testid="local-key-status"
+        style={{ padding: '8px 10px', border: '1px solid #bfa66d', borderRadius: 8 }}>
+        {message}
+      </p>
       <div className="isolated-lab-actions">
         {!key && <button type="button" onClick={() => void generate()}
           disabled={!ready || busy}>生成此浏览器测试密钥</button>}
         {key && <button type="button" onClick={() => void verify()} disabled={busy}>
-          验证本机签名（不联网）
+          {busy ? '正在本机验证……' : '验证本机签名（不联网）'}
         </button>}
         {key && <button type="button" onClick={() => void discard()} disabled={busy}>
           清除未配对测试密钥
         </button>}
       </div>
-      <p role="status">{message}</p>
       <p>注意：清除 Safari 网站数据可能导致测试私钥丢失。正式设备配对与服务器撤销将在后续独立开发。</p>
     </section>
   )
