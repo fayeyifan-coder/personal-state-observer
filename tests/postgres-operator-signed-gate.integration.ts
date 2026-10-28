@@ -152,9 +152,17 @@ try {
     fingerprint: await pairingFingerprint(phone.jwk)
   })
   const revokedSignature = await sign(revoked)
-  assert.equal(await gate.apply({ ...revoked, fingerprint: 'f'.repeat(64) },
-    await sign({ ...revoked, fingerprint: 'f'.repeat(64) })), 'not-eligible',
+  // A validly signed but unsuccessful command intentionally consumes its
+  // nonce, so each distinct operator attempt needs a fresh nonce.
+  const wrongFingerprintCommand = {
+    ...revoked, nonce: crypto.randomUUID(), fingerprint: 'f'.repeat(64)
+  }
+  assert.equal(await gate.apply(wrongFingerprintCommand,
+    await sign(wrongFingerprintCommand)), 'not-eligible',
     'even a signed but mismatched fingerprint cannot revoke the wrong key')
+  assert.equal(await gate.apply(wrongFingerprintCommand,
+    await sign(wrongFingerprintCommand)), 'replayed',
+    'unsuccessful signed commands consume their own nonce too')
   assert.equal((await deviceProof.getRegisteredPublisher(subject, phoneId))?.revoked, false)
   assert.equal(await gate.apply(revoked, revokedSignature), 'revoked')
   assert.equal(await gate.apply(revoked, revokedSignature), 'replayed')
