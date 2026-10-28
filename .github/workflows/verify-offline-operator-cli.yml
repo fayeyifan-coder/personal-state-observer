@@ -29,6 +29,9 @@ jobs:
         run: npm ci
       - name: Offline core and command-line safety tests
         run: npx tsx --test tests/operator-offline-cli.test.mjs
+      - name: Real interactive Linux terminal with hidden synthetic password
+        if: runner.os == 'Linux'
+        run: python3 tests/operator-offline-tty-smoke.py
       - name: Existing pairing signature and read-only safety regressions
         run: npm run test:manual-pairing
       - name: Check that normal production build remains unchanged
