@@ -138,7 +138,7 @@ if (process.argv.length !== 2 && !(
 
     process.stdout.write(
       'PASS：' + checks.length + ' 项离线虚构安全自检。\n' +
-      '未读取或写入任何文件，未联网，也未授权任何设备。\n'
+      '未读写任何用户数据、备份或凭据文件，未联网，也未授权任何设备。\n'
     )
   } catch (error) {
     process.stderr.write('FAIL：离线自检未通过；不要继续操作员配对。\n')
