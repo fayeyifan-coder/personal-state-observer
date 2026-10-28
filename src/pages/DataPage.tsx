@@ -10,6 +10,8 @@ import {
 } from '../services/backup'
 import { compareBackupCollections, type BackupComparison } from '../services/backupComparison'
 import { canSafelyReplaceWithBackup, getRestoreBlockReasons } from '../services/backupRestorePolicy'
+import { encryptBackup, decryptBackup, downloadEncryptedBackup, isEncryptedBackup,
+  MIN_BACKUP_PASSPHRASE_LENGTH, MAX_ENCRYPTED_BACKUP_FILE_BYTES } from '../services/encryptedBackup'
 import {
   deleteDeviceDay,
   getDeviceDay,
@@ -55,6 +57,11 @@ export function DataPage() {
     comparison: BackupComparison
   } | null>(null)
   const [restoreBusy, setRestoreBusy] = useState(false)
+  const [cryptoBusy, setCryptoBusy] = useState(false)
+  const [exportPassword, setExportPassword] = useState('')
+  const [exportConfirm, setExportConfirm] = useState('')
+  const [decryptPassword, setDecryptPassword] = useState('')
+  const [encryptedPending, setEncryptedPending] = useState<{ filename: string; envelope: unknown } | null>(null)
 
   const refresh = async () => {
     setLoading(true)
@@ -95,23 +102,84 @@ export function DataPage() {
     }
   }
 
+  async function handleEncryptedExport() {
+    if (cryptoBusy) return
+    setError('')
+    if (exportPassword !== exportConfirm) {
+      setError('两次输入的加密密码不一致。')
+      return
+    }
+    setCryptoBusy(true)
+    try {
+      const current = await readAllData()
+      const encrypted = await encryptBackup(
+        createBackup(current.dailyRecords, current.periodLabels, current.deviceData),
+        exportPassword
+      )
+      downloadEncryptedBackup(encrypted)
+      setExportPassword('')
+      setExportConfirm('')
+      setMessage('加密备份已下载。请另行妥善保管密码，丢失后无法恢复。')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '加密备份失败。')
+    } finally {
+      setCryptoBusy(false)
+    }
+  }
+
+  async function previewParsed(snapshot: AppBackup, filename: string, request: number) {
+    const current = await readAllData()
+    if (request !== latestImportRequest.current) return
+    setBackupPreview({ filename, snapshot, comparison: compareBackupCollections(current, snapshot) })
+    setMessage('只读比对完成，没有修改或上传本机记录。')
+  }
+
   async function handlePreviewBackup(file: File) {
     const request = ++latestImportRequest.current
     setBackupPreview(null)
+    setEncryptedPending(null)
+    setDecryptPassword('')
     setError('')
-    setMessage('正在本机检查备份差异……')
+    setMessage('正在本机检查备份……')
     try {
-      const parsed = JSON.parse(await file.text())
-      const snapshot = parseBackup(parsed)
-      const current = await readAllData()
+      if (file.size > MAX_ENCRYPTED_BACKUP_FILE_BYTES) {
+        throw new Error('备份文件过大，已停止读取。')
+      }
+      const parsed: unknown = JSON.parse(await file.text())
       if (request !== latestImportRequest.current) return
-      const comparison = compareBackupCollections(current, snapshot)
-      setBackupPreview({ filename: file.name, snapshot, comparison })
-      setMessage('只读比对已完成。没有导入或修改任何记录。')
+      if (isEncryptedBackup(parsed)) {
+        setEncryptedPending({ filename: file.name, envelope: parsed })
+        setMessage('识别到加密备份。输入密码后将在本机解密并预览。')
+      } else {
+        await previewParsed(parseBackup(parsed), file.name, request)
+      }
     } catch (cause) {
       if (request !== latestImportRequest.current) return
       setMessage('')
       setError(cause instanceof Error ? cause.message : '备份检查失败。')
+    }
+  }
+
+  async function handleDecryptPreview() {
+    const pending = encryptedPending
+    if (!pending || cryptoBusy) return
+    const request = latestImportRequest.current
+    setCryptoBusy(true)
+    setError('')
+    try {
+      const decrypted = await decryptBackup(pending.envelope, decryptPassword)
+      if (request !== latestImportRequest.current) return
+      await previewParsed(parseBackup(decrypted), pending.filename, request)
+      if (request !== latestImportRequest.current) return
+      setEncryptedPending(null)
+      setDecryptPassword('')
+    } catch (cause) {
+      if (request === latestImportRequest.current) {
+        setMessage('')
+        setError(cause instanceof Error ? cause.message : '解密失败。')
+      }
+    } finally {
+      setCryptoBusy(false)
     }
   }
 
@@ -375,14 +443,42 @@ export function DataPage() {
           </section>
 
           <section className="data-section">
+            <div className="section-heading"><span>加密备份</span><span>本机加密 · 不上传</span></div>
+            <div className="data-card">
+              <h2>加密导出跨设备备份</h2>
+              <p>用密码加密本机全部记录并下载。密码不会保存到网站或文件，丢失密码将无法恢复；当前仍需自行传输文件，不是自动云同步。</p>
+              <div className="data-form">
+                <label>
+                  <span>密码（至少 {MIN_BACKUP_PASSPHRASE_LENGTH} 个字符）</span>
+                  <input type="password" autoComplete="new-password"
+                    value={exportPassword} onChange={event => setExportPassword(event.target.value)}
+                    placeholder="使用较长且唯一的密码短语" />
+                </label>
+                <label>
+                  <span>再次输入密码</span>
+                  <input type="password" autoComplete="new-password"
+                    value={exportConfirm} onChange={event => setExportConfirm(event.target.value)}
+                    placeholder="再次输入密码以确认" />
+                </label>
+              </div>
+              <div className="backup-compare-actions">
+                <button className="primary" type="button" disabled={cryptoBusy || restoreBusy}
+                  onClick={() => void handleEncryptedExport()}>
+                  {cryptoBusy ? '处理中……' : '下载加密 JSON 备份'}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="data-section">
             <div className="section-heading"><span>备份差异预览</span><span>本机检查 · 不上传</span></div>
             <div className="data-card">
               <h2>检查备份再决定是否恢复</h2>
-              <p>选择 JSON 文件后，只比对内容，不会直接覆盖本机记录。发现本机独有记录、内容冲突或重复日期时，恢复会被阻止。</p>
+              <p>支持普通和加密 JSON 备份。加密文件先本机解锁，然后仅预览差异；冲突或本机独有记录仍禁止覆盖。</p>
               <button
                 className="quiet"
                 type="button"
-                disabled={restoreBusy}
+                disabled={restoreBusy || cryptoBusy}
                 onClick={() => inputRef.current?.click()}
               >选择 JSON 文件并预览</button>
               <input
@@ -391,13 +487,38 @@ export function DataPage() {
                 accept=".json,application/json"
                 aria-label="选择个人状态观察器 JSON 备份"
                 hidden
-                disabled={restoreBusy}
+                disabled={restoreBusy || cryptoBusy}
                 onChange={event => {
                   const file = event.target.files?.[0]
                   event.target.value = ''
                   if (file) void handlePreviewBackup(file)
                 }}
               />
+              {encryptedPending && (
+                <div className="backup-compare">
+                  <h3>解锁加密备份</h3>
+                  <p className="backup-filename">{encryptedPending.filename}</p>
+                  <label className="backup-password-label">
+                    <span>备份密码（仅在本机使用）</span>
+                    <input type="password" autoComplete="off"
+                      value={decryptPassword} onChange={event => setDecryptPassword(event.target.value)} />
+                  </label>
+                  <div className="backup-compare-actions">
+                    <button className="primary" type="button"
+                      disabled={cryptoBusy || restoreBusy || !decryptPassword}
+                      onClick={() => void handleDecryptPreview()}>
+                      {cryptoBusy ? '正在解密……' : '解密并预览差异'}
+                    </button>
+                    <button className="quiet" type="button" disabled={cryptoBusy}
+                      onClick={() => {
+                        ++latestImportRequest.current
+                        setEncryptedPending(null)
+                        setDecryptPassword('')
+                        setMessage('已取消解密，没有修改本机数据。')
+                      }}>取消</button>
+                  </div>
+                </div>
+              )}
               {backupPreview && (
                 <div className="backup-compare" role="region" aria-label="备份差异预览">
                   <h3>差异检查结果</h3>
@@ -466,7 +587,7 @@ export function DataPage() {
 
           <section className="data-note">
             <strong>数据主权</strong>
-            <p>没有账号、没有云端同步。请把备份保存到你自己控制的位置。</p>
+            <p>没有账号或云端同步。普通 JSON 是明文；加密 JSON 的密码丢失后无法找回。请自行妥善保管备份。</p>
           </section>
         </>
       )}
