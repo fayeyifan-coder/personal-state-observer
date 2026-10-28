@@ -26,7 +26,7 @@
 4. 访问保护：在 Netlify 的 **Project configuration > General > Visitor access > Project visibility** 中选择 **Private** 并覆盖 Production and previews。Free / Personal 方案的 Private 项目仅 Owner 可以访问；不需要购买 Pro 方案才能设置 Private。若界面无该配置，不应在未经确认时把测试站设为公开。
 5. 初次部署后必须先确认是独立 HTTPS origin、出现“**独立测试站 · 仅限虚构数据**”横幅、点击“生成两天虚构记录”有效，才把真实手机带入测试。任何页面出现正式个人历史记录都代表隔离失败，应立刻停止。
 
-**平台限制与授权：** 当前 GitHub 仓库仅有部署配置，本对话没有已连接的 Netlify 托管账户权限，因此尚无站点部署、域名或可分享的真实 URL。Netlify `netlify.app` 在中国大陆各子域名的可访问性不稳定，必须用用户的手机和所在网络实际打开验证；打不开就继续更换供应商，不能据此改变数据隔离规则。
+**已部署的测试站（用户提供的 Netlify 控制台截图）**：项目 `cheerful-licorice-f4602a` 显示 `Private`、`Published`，部署记录显示测试分支和 SHA `556178e`。用户在 iPhone Safari 已打开独立 HTTPS 站点并完成虚构备份测试。尚未通过 Netlify 连接直接读取项目后台配置；`Private` 状态仅来自用户截图。`netlify.app` 在不同网络的连通性需分别验收，不能改变数据隔离规则。
 
 **不要**将测试站放在 `https://fayeyifan-coder.github.io` 的任何子路径下。正式 `main` 和历史手机记录必须保持不变。
 
@@ -44,3 +44,22 @@
 - CI：`npm run build`、`npm run build:testlab`；Chromium 隔离浏览器核验两种构建不混淆、虚构记录只进入 `personal-state-observer-fixture-lab-v1`、无标记备份无法导入、加密快照仅预览和 320–390px 布局。
 - WebKit 的 `context.setOffline(true)` 文件读取报错仍是 PR #3 的上线阻断项。另有最小探针用于区分浏览器 File API 行为与应用逻辑；该探针不会以放宽检查的方式让 PR #3 提前合并。
 - **未完成真实手机与独立 HTTPS 验收之前：PR #1、#2、#3、测试分支都不得自动合并生产 main。**
+
+
+## 真机验收实录（2026-10-28，使用用户提供的截图与说明）
+
+| 验收项目 | 实测结果与证据边界 |
+| --- | --- |
+| 正确的 HTTPS 独立测试站 | 用户通过 Safari 浏览器访问 Netlify 域名，页面显示「独立测试站 · 仅限虚构数据」。截图显示仅有虚构数据；正式 GitHub Pages 未改动。 |
+| 初始化 | 点击「生成两天虚构记录」后，显示 2 个活动日、2 个完成记录、6 个已回答答案、1 个时期标记。 |
+| 冲突预检 | 虚构冲突备份：每日记录不同=1、相同=1；时期标记相同=1、设备数据相同=1；未出现确认恢复按钮。 |
+| 加密往返（桌面） | 加密 JSON 本地解密预览后，每日相同=2、时期标记相同=1、设备数据相同=1；不同=0。 |
+| iPhone Safari 备份文件预览 | 用户提供的 iPhone 截图显示开启飞行模式：普通 JSON 的每日记录仅备份=1、相同=2，时期与设备相同各 1，无冲突。 |
+| iPhone Safari 加密 JSON 解密预览 | 第二张 Safari 截图中出现 `personal-state-observer-encrypted-2026-10-28.json` 的差异表；每日相同=2、时期相同=1、设备相同=1，冲突和本机独有均为 0。证明该次解密、结构校验及本地比较成功。 |
+| 写入保护 | 上述截图仅显示预览。没有点击「确认以备份替换本机数据」的证据，不能声称完成了手机端恢复写入测试；这也是预期的安全界限。 |
+
+**离线证据保留条件：** 截图中显示飞行模式图标，用户按此前断网测试指引操作；截图不能独立证明 Wi-Fi 也处于关闭状态。若要将「真正完全离线」结论写为无条件 PASS，仍需用户明确确认无线网络与蜂窝网络均不可用。Safari 截图不是已安装 PWA 的独立应用验收，也不能代表所有 iOS/Android 版本。
+
+**与 Linux Playwright WebKit 的关系：** 先前的最小复现已证明 Linux WebKit `context.setOffline(true)` 可以让 `Blob.text()`、`File.text()` 与 `FileReader` 一并出现 I/O 异常；用户的 Safari 真机实测则成功读取和解密虚构文件。应保留 CI 诊断，不宜将前者直接推断为真实 Safari 必然失败。
+
+**当前阶段放行：** 独立 Netlify 测试站的核心交互验收可记录为完成；正式生产数据迁移、长期加密云同步、离线 PWA 安装、账号身份授权等未获验收。**不合并 PR #1–#4，不启用自动同步，不将测试数据导入正式网站。**
