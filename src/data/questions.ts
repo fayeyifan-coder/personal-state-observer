@@ -418,12 +418,8 @@ export const QUESTIONS: CoreQuestion[] = [
     showWhen: { all: [{ field: 'cycle_gateway', op: 'eq', value: 'discharge' }] }
   },
 
-  // —— 饮食：保留一个可长期比较的蛋白质总量 ——
-  {
-    id: 'protein_intake_g', parentId: null, phase: 'evening',
-    text: '今天大概摄入了多少蛋白质？',
-    helper: '单位 g。估算即可，不需要追求精确；目标是看长期趋势。', type: 'number'
-  },
+  // 日常未使用的「蛋白质总量」已从问卷移除；
+  // 历史 backup/answers 的 proteinIntakeG 字段保持兼容。
 
   // —— 排便：晚间总结 ——
   {
@@ -464,11 +460,10 @@ export const QUESTIONS: CoreQuestion[] = [
   }
 ]
 
-export const OPTIONAL_QUESTIONS: OptionalQuestion[] = [
-  // 设备 / 自测的晨起数值仍然使用原来的字段名，便于兼容旧备份。
-  { id: 'basal_temperature_c', label: '晨起体温', type: 'number', phase: 'morning', unit: '°C' },
-  { id: 'weight_kg', label: '体重', type: 'number', phase: 'morning', unit: 'kg' }
-]
+// 「晨起体温」「体重」连续一个月均无有效填写值，先退出每日问卷。
+// 保留 OPTIONAL_QUESTIONS 的导出和 FIELD_MAP 中旧字段的名字，
+// 以便现有备份、旧记录和未来自测功能继续兼容。
+export const OPTIONAL_QUESTIONS: OptionalQuestion[] = []
 
 export const FIELD_MAP: Record<string, string> = {
   sleep_duration_min: 'sleepDurationMin',
