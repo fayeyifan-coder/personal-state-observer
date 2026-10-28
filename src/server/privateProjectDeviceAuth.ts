@@ -326,7 +326,7 @@ export function createPrivateChallengeHandler(
       if (!created || !isUuid(created.nonce)) {
         return json({ error: 'challenge-unavailable' }, 429)
       }
-      return json({ nonce: created.nonce, expiresInSeconds: MAX_CHALLENGE_SECONDS })
+      return json({ nonce: created.nonce, siteId: options.expectedSiteId, ownerId: context.user!.id, expiresInSeconds: MAX_CHALLENGE_SECONDS })
     } catch {
       return json({ error: 'challenge-unavailable' }, 503)
     }
