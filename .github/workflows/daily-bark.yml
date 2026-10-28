@@ -1,47 +1,94 @@
 name: Daily Bark Reminder
 
+# GitHub Actions is a BEST-EFFORT scheduler; it can start hours late or skip.
+# iPhone Shortcuts Time-of-Day automation is recommended for punctual alerts.
 on:
   schedule:
-    # GitHub Actions cron 使用 UTC。
-    # 北京时间 08:17 = UTC 00:17。
-    # 北京时间 22:17 = UTC 14:17。
-    - cron: '17 0 * * *'
-    - cron: '17 14 * * *'
+    # 08:07 China time = 00:07 UTC. Off the overloaded top-of-hour.
+    # 22:07 China time = 14:07 UTC. This is NOT an exact-time guarantee.
+    - cron: '7 0 * * *'
+    - cron: '7 14 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pso-bark-reminder
+  cancel-in-progress: false
 
 jobs:
   remind:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Send Bark Notification
+      - name: Checkout policy source
+        uses: actions/checkout@v4
+
+      - name: Evaluate scheduled window and identify exact notification slot
+        id: guard
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+        shell: bash
+        run: |
+          node tools/bark-schedule-guard.mjs --github >> "$GITHUB_OUTPUT"
+
+      - name: Skip stale or unknown scheduled run
+        if: steps.guard.outputs.action != 'send'
+        env:
+          KIND: ${{ steps.guard.outputs.kind }}
+        run: |
+          echo "Bark request intentionally skipped: schedule ran too late or was unrecognized."
+          echo "No APNs request was sent. Check the policy diagnostics above."
+
+      - name: Send on-time Bark notification (API success is not device delivery)
+        if: steps.guard.outputs.action == 'send'
         env:
           BARK_KEY: ${{ secrets.BARK_KEY }}
-          SCHEDULE: ${{ github.event.schedule }}
+          KIND: ${{ steps.guard.outputs.kind }}
+        shell: bash
         run: |
-          if [ -z "$BARK_KEY" ]; then
-            echo "错误：未找到 BARK_KEY，请去仓库 Settings 配置"
+          set -euo pipefail
+          if [ -z "${BARK_KEY:-}" ]; then
+            echo "::error::BARK_KEY secret is missing."
             exit 1
           fi
-
           APP_URL="https://fayeyifan-coder.github.io/personal-state-observer/"
-          UTC_HOUR="$(date -u +%H)"
-
-          if [ "$SCHEDULE" = "17 0 * * *" ] || [ "$UTC_HOUR" = "00" ]; then
-            TITLE="私人观察台 · 早晨观察"
-            BODY="早晨观察时间到了。记录昨夜睡眠和今天醒来时的状态。"
-          elif [ "$SCHEDULE" = "17 14 * * *" ] || [ "$UTC_HOUR" = "14" ]; then
-            TITLE="私人观察台 · 晚间总结"
-            BODY="晚间总结时间到了。留下今天的情绪、身体状态和生活痕迹。"
-          else
-            TITLE="私人观察台 · 测试"
-            BODY="今天的你是什么样子？打开私人观察台，留下记录吧。"
+          case "$KIND" in
+            morning)
+              TITLE="私人观察台 · 早晨观察"
+              BODY="早晨观察时间到了。记录昨夜睡眠和今天醒来时的状态。"
+              ;;
+            evening)
+              TITLE="私人观察台 · 晚间总结"
+              BODY="晚间总结时间到了。留下今天的情绪、身体状态和生活痕迹。"
+              ;;
+            test)
+              TITLE="私人观察台 · 手动测试"
+              BODY="这是手动触发的测试通知。"
+              ;;
+            *)
+              echo "::error::Refusing unknown Bark notification kind."
+              exit 1
+              ;;
+          esac
+          # Build and send JSON without printing the secret or Bark response.
+          jq -nc --arg key "$BARK_KEY" --arg title "$TITLE" \
+            --arg body "$BODY" --arg url "$APP_URL" \
+            '{device_key:$key,title:$title,body:$body,url:$url}' \
+            > "$RUNNER_TEMP/bark-request.json"
+          STATUS=$(curl --silent --show-error --max-time 20 \
+            --output "$RUNNER_TEMP/bark-response.json" \
+            --write-out '%{http_code}' \
+            --header 'Content-Type: application/json; charset=utf-8' \
+            --data-binary @"$RUNNER_TEMP/bark-request.json" \
+            --request POST "https://api.day.app/push")
+          if [ "$STATUS" != "200" ] ||
+            ! jq -e '(.code | tostring) == "200"' "$RUNNER_TEMP/bark-response.json" > /dev/null; then
+            echo "::error::Bark API did not confirm acceptance; HTTP $STATUS."
+            exit 1
           fi
-
-          curl -X POST "https://api.day.app/push" \
-            -H "Content-Type: application/json; charset=utf-8" \
-            -d "{
-              \"device_key\": \"$BARK_KEY\",
-              \"title\": \"$TITLE\",
-              \"body\": \"$BODY\",
-              \"url\": \"$APP_URL\"
-            }"
+          echo "Bark server accepted the $KIND request. iPhone delivery is not independently verified."
+          # Delete even ephemeral test key material after the request.
+          rm -f "$RUNNER_TEMP/bark-request.json" "$RUNNER_TEMP/bark-response.json"
