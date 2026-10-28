@@ -12,7 +12,7 @@ Netlify Functions 的 `context.user` 是否能确认两台设备在 Netlify 账�
 ## 实现
 
 - `netlify/functions/lab-login-status.mjs`：仅接受单一目标
-  `GET /api/lab-login-status`，校验 HTTPS host 为
+  `GET /.netlify/functions/lab-login-status`，校验 HTTPS host 为
   `cheerful-licorice-f4602a.netlify.app` 和 Netlify 受信任 `context.site.name`。
   只有 `context.user.id` 存在、`expiresAt` 晚于现在时返回
   `{authenticated:true,status:"verified-private-login",permission:"read-only",cloudSync:"not-configured"}`。
@@ -20,7 +20,7 @@ Netlify Functions 的 `context.user` 是否能确认两台设备在 Netlify 账�
   **不返回邮箱、用户 ID、site ID、token、密码或健康记录。**
 - `src/components/LabLoginDiagnostic.tsx`：测试站黄色横幅内增加
   「检查 Netlify 登录（只读）」按钮，**只有人点击才发起同源 GET**。
-  200 正确 JSON 显示已验证；401 说明未确认；404 或 HTML 回退说明接口未部署；
+  200 正确 JSON 显示已验证；401 说明未确认；404 或 HTML 回退需区分路由缺失、Function 拒绝和站点访问保护；
   网络/授权错误说明请求失败。不会调用 POST、IndexedDB 或备份操作。
 - 函数仅在 Netlify 部署时可读取 `context.user`；本地 Vite
   模拟接口不能当作真实 Netlify 登录验收。
@@ -67,8 +67,17 @@ Netlify Function 请求可能消耗 Free credits，建议每台设备**手动点
   `context.user` 由 Netlify Private/team-login 验证，部署需在 2026-10-05 之后；
   本地 Netlify CLI 不提供该值。
 - https://docs.netlify.com/build/functions/configuration/ ：
-  Function `config.path` 自定义同源路由。
+  Function 使用默认 `/.netlify/functions/<name>` 路由；本次移除先前失效的 `config.path` 自定义路由。
 - https://docs.netlify.com/manage/security/secure-access-to-sites/project-visibility/ ：
   Private 项目与公开访问边界。
 
 **当前状态：代码待 CI 验证、Netlify 在线真机验收 NOT STARTED。**
+
+
+## 2026-10-28 真实截图补证和默认路由修复（PR #11）
+
+用户在 Netlify 生产测试域名直接打开 `/api/lab-login-status`，返回 Netlify 自身的 HTML `Page not found`（不是 Function 的 JSON 404）；而该部署已显示 `1 function deployed`。这说明该次请求未命中预期自定义 Function 路由，但不足以证明登录失效或解释路由未生效的最终原因。
+
+PR #11 将前端与 Function 代码统一改用 Netlify 文档保证的默认路径 `/.netlify/functions/lab-login-status`，并**删除自定义 `config.path`**。该函数仍要求主测试域名 HTTPS、受信任的站点名称和正常 Netlify 会话；仍然只输出不含身份信息的只读 JSON。旧 `/api/lab-login-status` 不再是测试地址。
+
+**新 URL 仅在 PR #11 被明确批准合入测试分支、Netlify 发布成功后才能作为真机验收路径。** 当前 GitHub CI 只能验证构建、函数逻辑和 Chromium mock，不能证明真实 Private 登录。若新地址仍返回 HTML 404，应打开 Netlify 的 Functions 列表、函数日志和站点的 Functions Directory 设置排查，**不得关闭 Private**。

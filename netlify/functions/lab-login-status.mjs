@@ -5,7 +5,8 @@
 
 const LAB_HOST = 'cheerful-licorice-f4602a.netlify.app'
 const LAB_SITE_NAME = 'cheerful-licorice-f4602a'
-const ROUTE = '/api/lab-login-status'
+// Use the documented default route instead of an unverified custom path.
+const ROUTE = '/.netlify/functions/lab-login-status'
 
 function respond(status, body) {
   return new Response(JSON.stringify(body), {
@@ -60,7 +61,5 @@ export default async function labLoginStatus(request, context) {
   })
 }
 
-export const config = {
-  path: ROUTE,
-  method: 'GET'
-}
+// No custom config.path: Netlify provides the built-in function URL.
+// Only GET is accepted by the handler's explicit method check.

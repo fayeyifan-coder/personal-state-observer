@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
-import loginStatus, { config } from '../netlify/functions/lab-login-status.mjs'
+import loginStatus from '../netlify/functions/lab-login-status.mjs'
 
-const URL = 'https://cheerful-licorice-f4602a.netlify.app/api/lab-login-status'
+const URL = 'https://cheerful-licorice-f4602a.netlify.app/.netlify/functions/lab-login-status'
 const OK_CONTEXT = {
   site: { name: 'cheerful-licorice-f4602a', id: 'synthetic-no-real-id' },
   user: { id: 'synthetic-test-netlify-user', email: 'test@example.invalid',
@@ -23,8 +23,6 @@ async function expectStatus(
   assert.doesNotMatch(text, /access_token|password|postgres|connectionString/)
   return JSON.parse(text)
 }
-assert.equal(config.path, '/api/lab-login-status')
-assert.equal(config.method, 'GET')
 const ok = await expectStatus(request(), OK_CONTEXT, 200)
 assert.deepEqual(ok, {
   authenticated: true,
@@ -51,10 +49,10 @@ assert.equal((await expectStatus(
   { site: OK_CONTEXT.site }, 401)).authenticated, false)
 assert.equal((await expectStatus(request(URL + '?who=me'), OK_CONTEXT, 200)).authenticated, true)
 assert.equal((await expectStatus(request(
-  'https://other-preview.netlify.app/api/lab-login-status'
+  'https://other-preview.netlify.app/.netlify/functions/lab-login-status'
 ), OK_CONTEXT, 404)).authenticated, false)
 assert.equal((await expectStatus(request(
-  'http://cheerful-licorice-f4602a.netlify.app/api/lab-login-status'
+  'http://cheerful-licorice-f4602a.netlify.app/.netlify/functions/lab-login-status'
 ), OK_CONTEXT, 404)).authenticated, false)
 assert.equal((await expectStatus(request(URL), {
   ...OK_CONTEXT, site: { name: 'attacker-private-project' }
